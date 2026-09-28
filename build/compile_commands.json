@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/home/clement/dev/AC-Math/build",
+  "command": "/usr/lib64/ccache/c++  -I/home/clement/dev/AC-Math/src -I/home/clement/dev/AC-Math -g -std=c++23 -Wall -Wextra -Wpedantic -o CMakeFiles/app.dir/src/main.cpp.o -c /home/clement/dev/AC-Math/src/main.cpp",
+  "file": "/home/clement/dev/AC-Math/src/main.cpp",
+  "output": "CMakeFiles/app.dir/src/main.cpp.o"
+}
+]

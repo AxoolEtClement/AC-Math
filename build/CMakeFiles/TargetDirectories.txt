@@ -1,2 +1,3 @@
+/home/clement/dev/AC-Math/build/CMakeFiles/app.dir
 /home/clement/dev/AC-Math/build/CMakeFiles/edit_cache.dir
 /home/clement/dev/AC-Math/build/CMakeFiles/rebuild_cache.dir

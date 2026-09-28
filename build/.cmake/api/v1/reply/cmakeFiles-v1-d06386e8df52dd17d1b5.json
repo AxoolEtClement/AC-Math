@@ -1,4 +1,25 @@
 {
+	"globsDependent" : 
+	[
+		{
+			"expression" : "/home/clement/dev/AC-Math/src/*.cpp",
+			"paths" : 
+			[
+				"/home/clement/dev/AC-Math/src/main.cpp"
+			],
+			"recurse" : true
+		},
+		{
+			"expression" : "/home/clement/dev/AC-Math/src/*.h",
+			"paths" : [],
+			"recurse" : true
+		},
+		{
+			"expression" : "/home/clement/dev/AC-Math/src/*.hpp",
+			"paths" : [],
+			"recurse" : true
+		}
+	],
 	"inputs" : 
 	[
 		{

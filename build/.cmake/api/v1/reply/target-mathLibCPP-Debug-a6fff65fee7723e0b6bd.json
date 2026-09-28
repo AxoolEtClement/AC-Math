@@ -19,7 +19,7 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 31,
+				"line" : 25,
 				"parent" : 0
 			}
 		]
@@ -29,8 +29,8 @@
 		"major" : 2,
 		"minor" : 10
 	},
-	"id" : "BasicMathsLib::@6890427a1f51a3e7e1df",
-	"name" : "BasicMathsLib",
+	"id" : "mathLibCPP::@6890427a1f51a3e7e1df",
+	"name" : "mathLibCPP",
 	"paths" : 
 	{
 		"build" : ".",
