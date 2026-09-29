@@ -7,11 +7,6 @@ namespace Benchmark {
 
     template <typename Func, typename... Args>
     void measure(int iterations, Func&& func, Args&&... args) {
-        // Warm-up to reduce cache miss noise
-        for (int i = 0; i < 5; ++i) {
-            std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
-        }
-
         auto start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < iterations; ++i) {
