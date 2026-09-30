@@ -29,6 +29,9 @@ target_include_directories(mathLibCPP INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )
 
+enable_testing()
+add_subdirectory(tests)
+
 # Avertissements stricts
 if(MSVC)
     target_compile_options(mathLibCPP INTERFACE /W4 /permissive- /Zc:__cplusplus)
@@ -43,3 +46,4 @@ add_executable(app ${SOURCES})
 
 # 5. Liaison de l'exécutable avec la bibliothèque de maths
 target_link_libraries(app PRIVATE mathLibCPP)
+
