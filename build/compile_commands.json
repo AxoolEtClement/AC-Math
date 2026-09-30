@@ -4,5 +4,53 @@
   "command": "/usr/lib64/ccache/c++  -I/home/clement/dev/AC-Math/src -I/home/clement/dev/AC-Math -g -std=c++23 -Wall -Wextra -Wpedantic -o CMakeFiles/app.dir/src/main.cpp.o -c /home/clement/dev/AC-Math/src/main.cpp",
   "file": "/home/clement/dev/AC-Math/src/main.cpp",
   "output": "CMakeFiles/app.dir/src/main.cpp.o"
+},
+{
+  "directory": "/home/clement/dev/AC-Math/build/tests",
+  "command": "/usr/lib64/ccache/c++  -I/home/clement/dev/AC-Math/tests/include -I/home/clement/dev/AC-Math/src -I/home/clement/dev/AC-Math -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/include -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest -g -std=c++23 -Wall -Wextra -Wpedantic -o CMakeFiles/run_tests.dir/src/Matrix3x3Tests.cpp.o -c /home/clement/dev/AC-Math/tests/src/Matrix3x3Tests.cpp",
+  "file": "/home/clement/dev/AC-Math/tests/src/Matrix3x3Tests.cpp",
+  "output": "tests/CMakeFiles/run_tests.dir/src/Matrix3x3Tests.cpp.o"
+},
+{
+  "directory": "/home/clement/dev/AC-Math/build/tests",
+  "command": "/usr/lib64/ccache/c++  -I/home/clement/dev/AC-Math/tests/include -I/home/clement/dev/AC-Math/src -I/home/clement/dev/AC-Math -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/include -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest -g -std=c++23 -Wall -Wextra -Wpedantic -o CMakeFiles/run_tests.dir/src/Matrix4x4Tests.cpp.o -c /home/clement/dev/AC-Math/tests/src/Matrix4x4Tests.cpp",
+  "file": "/home/clement/dev/AC-Math/tests/src/Matrix4x4Tests.cpp",
+  "output": "tests/CMakeFiles/run_tests.dir/src/Matrix4x4Tests.cpp.o"
+},
+{
+  "directory": "/home/clement/dev/AC-Math/build/tests",
+  "command": "/usr/lib64/ccache/c++  -I/home/clement/dev/AC-Math/tests/include -I/home/clement/dev/AC-Math/src -I/home/clement/dev/AC-Math -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/include -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest -g -std=c++23 -Wall -Wextra -Wpedantic -o CMakeFiles/run_tests.dir/src/Vec3Tests.cpp.o -c /home/clement/dev/AC-Math/tests/src/Vec3Tests.cpp",
+  "file": "/home/clement/dev/AC-Math/tests/src/Vec3Tests.cpp",
+  "output": "tests/CMakeFiles/run_tests.dir/src/Vec3Tests.cpp.o"
+},
+{
+  "directory": "/home/clement/dev/AC-Math/build/tests",
+  "command": "/usr/lib64/ccache/c++  -I/home/clement/dev/AC-Math/tests/include -I/home/clement/dev/AC-Math/src -I/home/clement/dev/AC-Math -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/include -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest -g -std=c++23 -Wall -Wextra -Wpedantic -o CMakeFiles/run_tests.dir/src/Vec4Tests.cpp.o -c /home/clement/dev/AC-Math/tests/src/Vec4Tests.cpp",
+  "file": "/home/clement/dev/AC-Math/tests/src/Vec4Tests.cpp",
+  "output": "tests/CMakeFiles/run_tests.dir/src/Vec4Tests.cpp.o"
+},
+{
+  "directory": "/home/clement/dev/AC-Math/build/_deps/googletest-build/googlemock",
+  "command": "/usr/lib64/ccache/c++  -I/home/clement/dev/AC-Math/build/_deps/googletest-src/googlemock/include -I/home/clement/dev/AC-Math/build/_deps/googletest-src/googlemock -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/include -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest -g -std=c++23 -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gmock.dir/src/gmock-all.cc.o -c /home/clement/dev/AC-Math/build/_deps/googletest-src/googlemock/src/gmock-all.cc",
+  "file": "/home/clement/dev/AC-Math/build/_deps/googletest-src/googlemock/src/gmock-all.cc",
+  "output": "_deps/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.o"
+},
+{
+  "directory": "/home/clement/dev/AC-Math/build/_deps/googletest-build/googlemock",
+  "command": "/usr/lib64/ccache/c++  -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googlemock/include -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googlemock -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/include -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest -g -std=c++23 -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gmock_main.dir/src/gmock_main.cc.o -c /home/clement/dev/AC-Math/build/_deps/googletest-src/googlemock/src/gmock_main.cc",
+  "file": "/home/clement/dev/AC-Math/build/_deps/googletest-src/googlemock/src/gmock_main.cc",
+  "output": "_deps/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.o"
+},
+{
+  "directory": "/home/clement/dev/AC-Math/build/_deps/googletest-build/googletest",
+  "command": "/usr/lib64/ccache/c++  -I/home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/include -I/home/clement/dev/AC-Math/build/_deps/googletest-src/googletest -g -std=c++23 -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gtest.dir/src/gtest-all.cc.o -c /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/src/gtest-all.cc",
+  "file": "/home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/src/gtest-all.cc",
+  "output": "_deps/googletest-build/googletest/CMakeFiles/gtest.dir/src/gtest-all.cc.o"
+},
+{
+  "directory": "/home/clement/dev/AC-Math/build/_deps/googletest-build/googletest",
+  "command": "/usr/lib64/ccache/c++  -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/include -isystem /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest -g -std=c++23 -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gtest_main.dir/src/gtest_main.cc.o -c /home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/src/gtest_main.cc",
+  "file": "/home/clement/dev/AC-Math/build/_deps/googletest-src/googletest/src/gtest_main.cc",
+  "output": "_deps/googletest-build/googletest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.o"
 }
 ]
