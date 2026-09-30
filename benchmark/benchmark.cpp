@@ -1,22 +1,12 @@
-#include <iostream>
-#include <chrono>
-#include <functional>
-#include <utility>
+#include <nanobench.h>
+#include "mathLibCPP/Vec3.h"
 
-namespace Benchmark {
+int main() {
+	Maths::Vec3<float> v1{ 1.0f, 2.0f, 3.0f };
+	Maths::Vec3<float> v2{ 4.0f, 5.0f, 6.0f };
+	ankerl::nanobench::Bench().run("Dot product vec3", [&] {
+		v1.Dot(v2);
+	});
 
-    template <typename Func, typename... Args>
-    void measure(int iterations, Func&& func, Args&&... args) {
-        auto start = std::chrono::high_resolution_clock::now();
-
-        for (int i = 0; i < iterations; ++i) {
-            std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
-        }
-
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed = end - start;
-
-		std::cout << "Total time for " << iterations << " iterations: " << elapsed.count() << " ms\n" 
-			<< "Mean time for single iteration : " << elapsed.count() / iterations << " ms\n";
-    }
+	return 0;
 }

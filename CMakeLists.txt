@@ -36,6 +36,8 @@ else()
     target_compile_options(mathLibCPP INTERFACE -Wall -Wextra -Wpedantic)
 endif()
 
+add_subdirectory(benchmark)
+
 # 4. Création du programme exécutable rattaché aux fichiers .cpp
 add_executable(app ${SOURCES})
 
