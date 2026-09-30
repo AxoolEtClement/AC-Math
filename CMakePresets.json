@@ -1,0 +1,17 @@
+{
+	"version": 3,
+	"cmakeMinimumRequired": {
+		"major": 3
+	},
+	"configurePresets": [
+		{
+			"name": "default",
+			"displayName": "Default Ninja Build",
+			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/build",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release"
+			}
+		}
+	]
+}
