@@ -31,6 +31,8 @@ target_include_directories(mathLibCPP INTERFACE
 
 enable_testing()
 add_subdirectory(tests)
+add_subdirectory(benchmark)
+add_subdirectory(mathLibSIMD)
 
 # Avertissements stricts
 if(MSVC)
@@ -39,7 +41,7 @@ else()
     target_compile_options(mathLibCPP INTERFACE -Wall -Wextra -Wpedantic)
 endif()
 
-add_subdirectory(benchmark)
+
 
 # 4. Création du programme exécutable rattaché aux fichiers .cpp
 add_executable(app ${SOURCES})
