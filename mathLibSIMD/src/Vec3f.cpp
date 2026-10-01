@@ -18,17 +18,17 @@ namespace simd {
 
     Vec3f Vec3f::operator+(const Vec3f& rhs) const
     {
-        return Store128(_mm_add_ps(Load128(this*), Load128(rhs));
+        return Store128(_mm_add_ps(Load128(*this), Load128(rhs));
     }
 
     Vec3f Vec3f::operator-(const Vec3f& rhs) const
     {
-        return Store128(_mm_sub_ps(Load128(this*), Load128(rhs));
+        return Store128(_mm_sub_ps(Load128(*this), Load128(rhs));
     }
 
     Vec3f Vec3f::operator*(const Vec3f& rhs) const
     {
-        return Store128(_mm_mul_ps(Load128(this*), Load128(rhs));
+        return Store128(_mm_mul_ps(Load128(*this), Load128(rhs));
     }
 
     Vec3f Vec3f::operator/(const Vec3f& rhs) const
@@ -38,17 +38,17 @@ namespace simd {
             throw std::domain_error("Cannot divide by a zero component");
         }
 
-        return Store128(_mm_div_ps(Load128(this*), Load128(rhs));
+        return Store128(_mm_div_ps(Load128(*this), Load128(rhs));
     }
 
     Vec3f Vec3f::operator-() const
     {
-        return Store128(_mm_div_ps(_mm_load_ps1(0.f), Load128(this*));
+        return Store128(_mm_div_ps(_mm_load_ps1(0.f), Load128(*this));
     }
 
     Vec3f Vec3f::operator*(float scalar) const
     {
-        return Store128(_mm_mul_ps(Load128(this*), _mm_set1_ps(scalar)));
+        return Store128(_mm_mul_ps(Load128(*this), _mm_set1_ps(scalar)));
     }
 
     Vec3f Vec3f::operator/(float scalar) const
@@ -58,58 +58,64 @@ namespace simd {
             throw std::domain_error("Cannot divide by zero");
         }
 
-        return Store128(_mm_div_ps(Load128(this*), _mm_set1_ps(scalar)));
+        return Store128(_mm_div_ps(Load128(*this), _mm_set1_ps(scalar)));
     }
 
     Vec3f& Vec3f::operator+=(const Vec3f& rhs)
     {
-        *this = Store128(_mm_add_ps(Load128(this*), Load128(rhs));
+        *this = Store128(_mm_add_ps(Load128(*this), Load128(rhs));
         return *this;
     }
 
     Vec3f& Vec3f::operator-=(const Vec3f& rhs)
     {
-        *this = Store128(_mm_sub_ps(Load128(this*), Load128(rhs));
+        *this = Store128(_mm_sub_ps(Load128(*this), Load128(rhs));
         return *this;
     }
 
     Vec3f& Vec3f::operator*=(const Vec3f& rhs)
     {
-        *this = *this * rhs;
+        *this = Store128(_mm_mul_ps(Load128(*this), Load128(rhs));
         return *this;
     }
 
     Vec3f& Vec3f::operator/=(const Vec3f& rhs)
     {
-        *this = *this / rhs;
+        *this = Store128(_mm_div_ps(Load128(*this), Load128(rhs));
         return *this;
     }
 
     Vec3f& Vec3f::operator*=(float scalar)
     {
-        *this = *this * scalar;
+        *this = Store128(_mm_mul_ps(Load128(*this), _mm_set1_ps(scalar)));
         return *this;
     }
 
     Vec3f& Vec3f::operator/=(float scalar)
     {
-        *this = *this / scalar;
+        if (scalar == 0.f)
+        {
+            throw std::domain_error("Cannot divide by zero");
+        }
+        *this = Store128(_mm_div_ps(Load128(*this), _mm_set1_ps(scalar)));
         return *this;
     }
 
     bool Vec3f::operator==(const Vec3f& rhs) const
     {
-        return x == rhs.x && y == rhs.y && z == rhs.z;
+        __m128 mask = _mm_cmpeq_ps(Load128(*this), Load128(rhs));
+        return _mm_movemask_ps(mask) == 0xF;
     }
 
     bool Vec3f::operator!=(const Vec3f& rhs) const
     {
-        return !(*this == rhs);
+        __m128 mask = _mm_cmpeq_ps(Load128(*this), Load128(rhs));
+        return _mm_movemask_ps(mask) != 0xF;
     }
 
-    T Vec3f::Dot(const Vec3f& rhs) const
+    float Vec3f::Dot(const Vec3f& rhs) const
     {
-        return x * rhs.x + y * rhs.y + z * rhs.z;
+        return Store128(_mm_dp_ps(Load128(*this), Load128(rhs))).x;
     }
 
     Vec3f Vec3f::Cross(const Vec3f& rhs) const
@@ -121,12 +127,12 @@ namespace simd {
 
     float Vec3f::MagnitudeSquared() const
     {
-        return Dot(*this);
+        return Store128(_mm_dp_ps(Load128(*this), Load128(rhs))).x;
     }
 
     float Vec3f::Magnitude() const
     {
-        return std::hypot(x, y, z);
+        return Store128(_mm_sqrt_ps(_mm_dp_ps(Load128(*this), Load128(rhs)))).x;
     }
 
     Vec3f Vec3f::Normalize() const
