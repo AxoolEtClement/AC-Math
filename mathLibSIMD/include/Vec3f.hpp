@@ -57,7 +57,6 @@ namespace simd
         static const Vec3f UnitZ;
 
     private:
-        T _;
         inline __m128 Load128(const Vec3f& v);
         inline Vec3f Store128(__m128 val);
     };
