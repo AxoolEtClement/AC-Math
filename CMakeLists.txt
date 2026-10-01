@@ -48,4 +48,3 @@ add_executable(app ${SOURCES})
 
 # 5. Liaison de l'exécutable avec la bibliothèque de maths
 target_link_libraries(app PRIVATE mathLibCPP)
-
