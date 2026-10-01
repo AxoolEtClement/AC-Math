@@ -13,3 +13,4 @@ add_executable(benchmark benchmark.cpp)
 
 target_link_libraries(benchmark PRIVATE nanobench)
 target_link_libraries(benchmark PRIVATE mathLibCPP)
+target_link_libraries(benchmark PRIVATE mathLibSIMD)

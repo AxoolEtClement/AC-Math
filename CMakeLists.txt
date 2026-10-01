@@ -30,9 +30,12 @@ target_include_directories(mathLibCPP INTERFACE
 )
 
 enable_testing()
+add_subdirectory(mathLibSIMD)
 add_subdirectory(tests)
 add_subdirectory(benchmark)
-add_subdirectory(mathLibSIMD)
+
+
+target_compile_options(mathLibSIMD PUBLIC -msse4.1)
 
 # Avertissements stricts
 if(MSVC)
