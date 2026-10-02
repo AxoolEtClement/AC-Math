@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 # 1. Recherche récursive des fichiers d'en-tête
 file(GLOB_RECURSE HEADERS
@@ -30,9 +31,12 @@ target_include_directories(mathLibCPP INTERFACE
 )
 
 enable_testing()
+add_subdirectory(mathLibSIMD)
 add_subdirectory(tests)
 add_subdirectory(benchmark)
-add_subdirectory(mathLibSIMD)
+
+
+target_compile_options(mathLibSIMD PUBLIC -msse4.1)
 
 # Avertissements stricts
 if(MSVC)
