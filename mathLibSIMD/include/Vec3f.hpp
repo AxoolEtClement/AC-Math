@@ -8,18 +8,20 @@
 
 namespace simd
 {
-    // Scalar teaching baseline. No SIMD, custom alignment or forced inlining.
-    class Vec3f
+    class alignas(16) Vec3f
     {
     public:
-        float x;
-        float y;
-        float z;
+        
 
         Vec3f();
-        Vec3f(float _x, float _y, float _z);
+        Vec3f(float x, float y, float z);
 
-        explicit Vec3f(const Vec3f& other);
+        Vec3f(const Vec3f& other);
+        Vec3f(__m128 data);
+
+        float getX() const;
+        float getY() const;
+        float getZ() const;
 
         Vec3f operator+(const Vec3f& rhs) const;
         Vec3f operator-(const Vec3f& rhs) const;
@@ -41,7 +43,6 @@ namespace simd
         Vec3 Cross(const Vec3f& rhs) const;
         float MagnitudeSquared() const;
         float Magnitude() const;
-        // Returns a new vector. Throws domain_error for zero or non-finite input.
         Vec3f Normalize() const;
         float DistanceSquared(const Vec3f& rhs) const;
         float Distance(const Vec3f& rhs) const;
@@ -57,6 +58,8 @@ namespace simd
         static const Vec3f UnitZ;
 
     private:
+        __m128 _data;
+
         inline __m128 Load128(const Vec3f& v);
         inline Vec3f Store128(__m128 val);
     };
