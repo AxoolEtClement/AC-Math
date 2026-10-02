@@ -1,34 +1,35 @@
 #include "Vec3f.hpp"
 
 namespace simd {
-    Vec3f::Vec3f() : x(0), y(0), z(0)
+    Vec3f::Vec3f() : _data{ _mm_setzero_ps() }
     {
-
     }
 
-    Vec3f::Vec3f(float _x, float _y, float _z) : x(_x), y(_y), z(_z)
+    Vec3f::Vec3f(float x, float y, float z) : _data{ _mm_set_ps(0.f, z, y, x) }
     {
-
     }
 
-    Vec3f::Vec3f(const Vec3f& other) : x(other.x), y(other.y), z(other.z)
+    Vec3f::Vec3f(const Vec3f& other) : _data{ other._data }
     {
+    }
 
+    Vec3f::Vec3f(__m128 data) : _data{ data }
+    {
     }
 
     Vec3f Vec3f::operator+(const Vec3f& rhs) const
     {
-        return Store128(_mm_add_ps(Load128(*this), Load128(rhs));
+        return { _mm_add_ps(_data, rhs._data) };
     }
 
     Vec3f Vec3f::operator-(const Vec3f& rhs) const
     {
-        return Store128(_mm_sub_ps(Load128(*this), Load128(rhs));
+        return { _mm_sub_ps(_data, rhs._data) };
     }
 
     Vec3f Vec3f::operator*(const Vec3f& rhs) const
     {
-        return Store128(_mm_mul_ps(Load128(*this), Load128(rhs));
+        return { _mm_mul_ps(_data, rhs._data) };
     }
 
     Vec3f Vec3f::operator/(const Vec3f& rhs) const
@@ -38,17 +39,17 @@ namespace simd {
             throw std::domain_error("Cannot divide by a zero component");
         }
 
-        return Store128(_mm_div_ps(Load128(*this), Load128(rhs));
+        return { _mm_div_ps(_data, rhs._data) };
     }
 
     Vec3f Vec3f::operator-() const
     {
-        return Store128(_mm_div_ps(_mm_load_ps1(0.f), Load128(*this));
+        return { _mm_div_ps(_mm_setzero_ps(), _data) };
     }
 
     Vec3f Vec3f::operator*(float scalar) const
     {
-        return Store128(_mm_mul_ps(Load128(*this), _mm_set1_ps(scalar)));
+        return { _mm_mul_ps(_data, _mm_set_ps1(scalar)) };
     }
 
     Vec3f Vec3f::operator/(float scalar) const
@@ -58,36 +59,36 @@ namespace simd {
             throw std::domain_error("Cannot divide by zero");
         }
 
-        return Store128(_mm_div_ps(Load128(*this), _mm_set1_ps(scalar)));
+        return { _mm_div_ps(_data, _mm_set_ps1(scalar)) };
     }
 
     Vec3f& Vec3f::operator+=(const Vec3f& rhs)
     {
-        *this = Store128(_mm_add_ps(Load128(*this), Load128(rhs));
+        _data = _mm_add_ps(_data, rhs._data);
         return *this;
     }
 
     Vec3f& Vec3f::operator-=(const Vec3f& rhs)
     {
-        *this = Store128(_mm_sub_ps(Load128(*this), Load128(rhs));
+        _data = _mm_sub_ps(_data, rhs._data);
         return *this;
     }
 
     Vec3f& Vec3f::operator*=(const Vec3f& rhs)
     {
-        *this = Store128(_mm_mul_ps(Load128(*this), Load128(rhs));
+        _data = _mm_mul_ps(_data, rhs._data);
         return *this;
     }
 
     Vec3f& Vec3f::operator/=(const Vec3f& rhs)
     {
-        *this = Store128(_mm_div_ps(Load128(*this), Load128(rhs));
+        _data = _mm_div_ps(_data, rhs._data);
         return *this;
     }
 
     Vec3f& Vec3f::operator*=(float scalar)
     {
-        *this = Store128(_mm_mul_ps(Load128(*this), _mm_set1_ps(scalar)));
+        _data = _mm_mul_ps(_data, _mm_set_ps1(scalar));
         return *this;
     }
 
@@ -97,42 +98,46 @@ namespace simd {
         {
             throw std::domain_error("Cannot divide by zero");
         }
-        *this = Store128(_mm_div_ps(Load128(*this), _mm_set1_ps(scalar)));
+        _data = _mm_div_ps(_data, _mm_set_ps1(scalar));
         return *this;
     }
 
     bool Vec3f::operator==(const Vec3f& rhs) const
     {
-        __m128 mask = _mm_cmpeq_ps(Load128(*this), Load128(rhs));
-        return _mm_movemask_ps(mask) == 0xF;
+        return _mm_movemask_ps(_mm_cmpeq_ps(_data, rhs._data)) == 0xF;
     }
 
     bool Vec3f::operator!=(const Vec3f& rhs) const
     {
-        __m128 mask = _mm_cmpeq_ps(Load128(*this), Load128(rhs));
-        return _mm_movemask_ps(mask) != 0xF;
+        return _mm_movemask_ps(_mm_cmpeq_ps(_data, rhs._data)) != 0xF;
     }
 
     float Vec3f::Dot(const Vec3f& rhs) const
     {
-        return Store128(_mm_dp_ps(Load128(*this), Load128(rhs))).x;
+        return _mm_cvtss_f32(_mm_dp_ps(_data, rhs._data));
     }
 
     Vec3f Vec3f::Cross(const Vec3f& rhs) const
     {
-        return { y * rhs.z - z * rhs.y,
-                z * rhs.x - x * rhs.z,
-                x * rhs.y - y * rhs.x };
+        return { _mm_sub_ps(
+            _mm_mul_ps(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 0, 2, 1)), _mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 1, 0, 2))), 
+            _mm_mul_ps(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 1, 0, 2)), _mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 0, 2, 1)))
+        ) };
+
+
+        //return { y * rhs.z - z * rhs.y,
+        //        z * rhs.x - x * rhs.z,
+        //        x * rhs.y - y * rhs.x };
     }
 
     float Vec3f::MagnitudeSquared() const
     {
-        return Store128(_mm_dp_ps(Load128(*this), Load128(rhs))).x;
+        return _mm_cvtss_f32(_mm_dp_ps(_data, _data));
     }
 
     float Vec3f::Magnitude() const
     {
-        return Store128(_mm_sqrt_ps(_mm_dp_ps(Load128(*this), Load128(rhs)))).x;
+        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(_data, _data)));
     }
 
     Vec3f Vec3f::Normalize() const
@@ -149,18 +154,20 @@ namespace simd {
             throw std::domain_error("Cannot normalize the zero vector");
         }
 
-        const Vec3f scaled = *this / scale;
-        return scaled / scaled.Magnitude();
+        __m128 scaled = _mm_div_ps(_data, _mm_set_ps1(scalar));
+        return { _mm_div_ps(scaled, _mm_sqrt_ps(_mm_dp_ps(scaled, scaled))) };
     }
 
     float Vec3f::DistanceSquared(const Vec3f& rhs) const
     {
-        return (*this - rhs).MagnitudeSquared();
+        __m128 diff{ _mm_sub_ps(_data, rhs._data) };
+        return _mm_cvtss_f32(_mm_dp_ps(diff, diff));
     }
 
     float Vec3f::Distance(const Vec3f& rhs) const
     {
-        return (*this - rhs).Magnitude();
+        __m128 diff{ _mm_sub_ps(_data, rhs._data) };
+        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(diff, diff)));
     }
 
     float Vec3f::Angle(const Vec3f& rhs) const
@@ -171,17 +178,17 @@ namespace simd {
 
     Vec3f Vec3f::Lerp(const Vec3f& a, const Vec3f& b, float t)
     {
-        return a * (1.f - t) + b * t;
+        return { _mm_add_ps(a._data, _mm_mul_ps(_mm_sub_ps(b._data, a._data), _mm_set_ps1(t))) };
     }
 
     Vec3f Vec3f::Min(const Vec3f& a, const Vec3f& b)
     {
-        return { std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z) };
+        return { _mm_min_ps(a._data, b._data) };
     }
 
     Vec3f Vec3f::Max(const Vec3f& a, const Vec3f& b)
     {
-        return { std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z) };
+        return { _mm_max_ps(a._data, b._data) };
     }
 
     const Vec3f Vec3f::Zero{ 0, 0, 0 };
