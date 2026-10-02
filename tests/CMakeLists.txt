@@ -19,7 +19,7 @@ add_executable(run_tests ${SOURCES})
 target_include_directories(run_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Utilisation du bon nom de cible : mathLibCPP
-target_link_libraries(run_tests PRIVATE mathLibCPP gtest_main)
+target_link_libraries(run_tests PRIVATE mathLibCPP mathLibSIMD gtest_main)
 
 include(GoogleTest)
 gtest_discover_tests(run_tests)

@@ -13,26 +13,45 @@ int main() {
 
     float scalar = 2.5f;
 
-    // --- BENCHMARK : Addition de vecteurs (+) ---
-    
-    ankerl::nanobench::Bench().run("+ vec4 (Standard C++)", [&] {
+    // --- WARM UP ---
+    {
         ankerl::nanobench::doNotOptimizeAway(v1_cpp + v2_cpp);
-    });
-
-    ankerl::nanobench::Bench().run("+ vec4 (SIMD)", [&] {
         ankerl::nanobench::doNotOptimizeAway(v1_simd + v2_simd);
-    });
-
-
-    // --- BENCHMARK : Multiplication par un scalaire (* float) ---
-
-    ankerl::nanobench::Bench().run("* scalar (Standard C++)", [&] {
         ankerl::nanobench::doNotOptimizeAway(v1_cpp * scalar);
-    });
-
-    ankerl::nanobench::Bench().run("* scalar (SIMD)", [&] {
         ankerl::nanobench::doNotOptimizeAway(v1_simd * scalar);
-    });
+    }
+
+    // --- BENCHMARK 1 : Addition de vecteurs (+) ---
+    {
+        ankerl::nanobench::Bench bench;
+        bench.epochs(50)
+             .minEpochIterations(1'100'000) // Augmenté pour stabiliser
+             .relative(true);
+
+        bench.run("+ vec4 (Standard C++)", [&] {
+            ankerl::nanobench::doNotOptimizeAway(v1_cpp + v2_cpp);
+        });
+
+        bench.run("+ vec4 (SIMD)", [&] {
+            ankerl::nanobench::doNotOptimizeAway(v1_simd + v2_simd);
+        });
+    }
+
+    // --- BENCHMARK 2 : Multiplication par un scalaire (* float) ---
+    {
+        ankerl::nanobench::Bench bench;
+        bench.epochs(50)
+             .minEpochIterations(1'100'000) // Augmenté pour stabiliser
+             .relative(true);
+
+        bench.run("* scalar (Standard C++)", [&] {
+            ankerl::nanobench::doNotOptimizeAway(v1_cpp * scalar);
+        });
+
+        bench.run("* scalar (SIMD)", [&] {
+            ankerl::nanobench::doNotOptimizeAway(v1_simd * scalar);
+        });
+    }
 
     return 0;
 }

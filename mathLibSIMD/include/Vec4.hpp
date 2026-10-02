@@ -12,16 +12,21 @@ namespace simd
     class alignas(16) Vec4
     {
     public:
-        float x;
-        float y;
-        float z;
-        float w;
 
         Vec4();
         Vec4(float _x, float _y, float _z, float _w);
-        explicit Vec4(const Vec4& other);
+        Vec4(const Vec4& other);
+        Vec4(__m128 data);
 
-        static __m128 load(const Vec4& v);
+        float getX() const;
+        float getY() const;
+        float getZ() const;
+        float getW() const;
+        void setX(float value);
+        void setY(float value);
+        void setZ(float value);
+        void setW(float value);
+        //static __m128 load(const Vec4& v);
         static Vec4 store(__m128 val);
 
         Vec4 operator+(const Vec4& rhs) const;
@@ -58,6 +63,12 @@ namespace simd
         static const Vec4 UnitY;
         static const Vec4 UnitZ;
         static const Vec4 UnitW;
+
+        
+
+    private:
+        __m128 _data;
     };
+    Vec4 operator*(float scalar, const Vec4& vector);
     
 }
