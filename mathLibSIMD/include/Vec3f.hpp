@@ -34,13 +34,13 @@ namespace simd
         Vec3f& operator-=(const Vec3f& rhs);
         Vec3f& operator*=(const Vec3f& rhs);
         Vec3f& operator/=(const Vec3f& rhs);
-        Vec3f& operator*=(T scalar);
-        Vec3f& operator/=(T scalar);
+        Vec3f& operator*=(float scalar);
+        Vec3f& operator/=(float scalar);
         bool operator==(const Vec3f& rhs) const;
         bool operator!=(const Vec3f& rhs) const;
 
         float Dot(const Vec3f& rhs) const;
-        Vec3 Cross(const Vec3f& rhs) const;
+        Vec3f Cross(const Vec3f& rhs) const;
         float MagnitudeSquared() const;
         float Magnitude() const;
         Vec3f Normalize() const;
@@ -59,8 +59,5 @@ namespace simd
 
     private:
         __m128 _data;
-
-        inline __m128 Load128(const Vec3f& v);
-        inline Vec3f Store128(__m128 val);
     };
 }
