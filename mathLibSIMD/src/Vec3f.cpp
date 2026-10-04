@@ -17,6 +17,21 @@ namespace simd {
     {
     }
 
+    float Vec3f::getX() const
+    {
+        return _mm_cvtss_f32(_data);
+    }
+
+    float Vec3f::getY() const
+    {
+        return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(2, 2, 2, 2)));
+    }
+
+    float Vec3f::getZ() const
+    {
+        return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(2, 2, 2, 2)));
+    }
+
     Vec3f Vec3f::operator+(const Vec3f& rhs) const
     {
         return { _mm_add_ps(_data, rhs._data) };
@@ -34,7 +49,7 @@ namespace simd {
 
     Vec3f Vec3f::operator/(const Vec3f& rhs) const
     {
-        if (rhs.x == 0.f || rhs.y == 0.f || rhs.z == 0.f)
+        if (rhs.getX() == 0.f || rhs.getY() == 0.f || rhs.getZ() == 0.f)
         {
             throw std::domain_error("Cannot divide by a zero component");
         }
@@ -114,7 +129,7 @@ namespace simd {
 
     float Vec3f::Dot(const Vec3f& rhs) const
     {
-        return _mm_cvtss_f32(_mm_dp_ps(_data, rhs._data));
+        return _mm_cvtss_f32(_mm_dp_ps(_data, rhs._data, 0x7F));
     }
 
     Vec3f Vec3f::Cross(const Vec3f& rhs) const
@@ -132,48 +147,60 @@ namespace simd {
 
     float Vec3f::MagnitudeSquared() const
     {
-        return _mm_cvtss_f32(_mm_dp_ps(_data, _data));
+        return _mm_cvtss_f32(_mm_dp_ps(_data, _data, 0x7F));
     }
 
     float Vec3f::Magnitude() const
     {
-        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(_data, _data)));
+        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(_data, _data, 0x7F)));
     }
 
     Vec3f Vec3f::Normalize() const
     {
-        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+        if (!std::isfinite(this->getX()) || !std::isfinite(this->getY()) || !std::isfinite(this->getZ()))
         {
             throw std::domain_error("Cannot normalize non-finite components");
         }
 
         // Scaling avoids overflowing/underflowing the squared magnitude.
-        const float scale = std::max({ std::abs(x), std::abs(y), std::abs(z) });
+        const float scale = std::max({ std::abs(this->getX()), std::abs(this->getY()), std::abs(this->getZ()) });
         if (scale == 0.f)
         {
             throw std::domain_error("Cannot normalize the zero vector");
         }
 
-        __m128 scaled = _mm_div_ps(_data, _mm_set_ps1(scalar));
-        return { _mm_div_ps(scaled, _mm_sqrt_ps(_mm_dp_ps(scaled, scaled))) };
+        __m128 scaled = _mm_div_ps(_data, _mm_set_ps1(scale));
+        return { _mm_div_ps(scaled, _mm_sqrt_ps(_mm_dp_ps(scaled, scaled, 0x7F))) };
     }
 
     float Vec3f::DistanceSquared(const Vec3f& rhs) const
     {
         __m128 diff{ _mm_sub_ps(_data, rhs._data) };
-        return _mm_cvtss_f32(_mm_dp_ps(diff, diff));
+        return _mm_cvtss_f32(_mm_dp_ps(diff, diff, 0x71));
     }
 
     float Vec3f::Distance(const Vec3f& rhs) const
     {
         __m128 diff{ _mm_sub_ps(_data, rhs._data) };
-        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(diff, diff)));
+        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(diff, diff, 0x71)));
     }
 
     float Vec3f::Angle(const Vec3f& rhs) const
     {
-        const float cosine = Normalize().Dot(rhs.Normalize());
-        return std::acos(std::clamp(cosine, -1.f, 1.f));
+        __m128 dot_vec = _mm_dp_ps(_data, rhs._data, 0x71);
+
+        __m128 mag_vec = _mm_sqrt_ps(_mm_mul_ps(_mm_dp_ps(_data, _data, 0x71), _mm_dp_ps(rhs._data, rhs._data, 0x71)));
+
+        float dot = _mm_cvtss_f32(dot_vec);
+        float mag = _mm_cvtss_f32(mag_vec);
+
+        if (mag < 1e-6f) return 0.0f;
+
+        float cos_theta = dot / mag;
+        cos_theta = std::max(-1.0f, std::min(1.0f, cos_theta));
+        cos_theta = std::clamp(-1.f, 1.f, cos_theta);
+
+        return std::acos(cos_theta);
     }
 
     Vec3f Vec3f::Lerp(const Vec3f& a, const Vec3f& b, float t)
@@ -204,23 +231,5 @@ namespace simd {
     Vec3f operator*(float scalar, const Vec3f& vector)
     {
         return vector * scalar;
-    }
-
-    inline __m128 Vec3f::Load128(const Vec3f& v)
-    {
-        return _mm_setr_ps(v.x, v.y, v.z, 0.f);
-    }
-
-    inline Vec3f Vec3f::Store128(__m128 val)
-    {
-        float components[4];
-
-        _mm_storeu_ps(components, val);
-
-        return {
-            components[0],
-            components[1],
-            components[2]
-        };
     }
 }
