@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <immintrin.h>
 
+class Matrix4x4;
 
 namespace simd
 {
@@ -64,7 +65,7 @@ namespace simd
         static const Vec4 UnitZ;
         static const Vec4 UnitW;
 
-        
+        friend class Matrix4x4;
 
     private:
         __m128 _data;
