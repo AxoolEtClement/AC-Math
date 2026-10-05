@@ -17,20 +17,14 @@ namespace simd {
     {
     }
 
-    float Vec3f::getX() const
-    {
-        return _mm_cvtss_f32(_data);
-    }
+    float Vec3f::getX() const { return _mm_cvtss_f32(_data); }
+    float Vec3f::getY() const { return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(1, 1, 1, 1))); }
+    float Vec3f::getZ() const { return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(2, 2, 2, 2))); }
 
-    float Vec3f::getY() const
-    {
-        return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(2, 2, 2, 2)));
-    }
-
-    float Vec3f::getZ() const
-    {
-        return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(2, 2, 2, 2)));
-    }
+    // _mm_insert_ps(dst, src, imm8) : bits 5:4 = lane de destination, bits 7:6 = lane source (0 ici)
+    void Vec3f::setX(float value) { _data = _mm_move_ss(_data, _mm_set_ss(value)); }
+    void Vec3f::setY(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x10); }
+    void Vec3f::setZ(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x20); }
 
     Vec3f Vec3f::operator+(const Vec3f& rhs) const
     {
@@ -59,12 +53,12 @@ namespace simd {
 
     Vec3f Vec3f::operator-() const
     {
-        return { _mm_div_ps(_mm_setzero_ps(), _data) };
+        return { _mm_sub_ps(_mm_setzero_ps(), _data) };
     }
 
     Vec3f Vec3f::operator*(float scalar) const
     {
-        return { _mm_mul_ps(_data, _mm_set_ps1(scalar)) };
+        return { _mm_mul_ps(_data, _mm_set1_ps(scalar)) };
     }
 
     Vec3f Vec3f::operator/(float scalar) const
@@ -74,7 +68,7 @@ namespace simd {
             throw std::domain_error("Cannot divide by zero");
         }
 
-        return { _mm_div_ps(_data, _mm_set_ps1(scalar)) };
+        return { _mm_div_ps(_data, _mm_set1_ps(scalar)) };
     }
 
     Vec3f& Vec3f::operator+=(const Vec3f& rhs)
@@ -97,13 +91,17 @@ namespace simd {
 
     Vec3f& Vec3f::operator/=(const Vec3f& rhs)
     {
+        if (rhs.getX() == 0.f || rhs.getY() == 0.f || rhs.getZ() == 0.f)
+        {
+            throw std::domain_error("Cannot divide by a zero component");
+        }
         _data = _mm_div_ps(_data, rhs._data);
         return *this;
     }
 
     Vec3f& Vec3f::operator*=(float scalar)
     {
-        _data = _mm_mul_ps(_data, _mm_set_ps1(scalar));
+        _data = _mm_mul_ps(_data, _mm_set1_ps(scalar));
         return *this;
     }
 
@@ -135,8 +133,8 @@ namespace simd {
     Vec3f Vec3f::Cross(const Vec3f& rhs) const
     {
         return { _mm_sub_ps(
-            _mm_mul_ps(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 0, 2, 1)), _mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 1, 0, 2))), 
-            _mm_mul_ps(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 1, 0, 2)), _mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 0, 2, 1)))
+            _mm_mul_ps(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 0, 2, 1)), _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(3, 1, 0, 2))), 
+            _mm_mul_ps(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 1, 0, 2)), _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(3, 0, 2, 1)))
         ) };
 
 
@@ -188,17 +186,17 @@ namespace simd {
     float Vec3f::Angle(const Vec3f& rhs) const
     {
         __m128 dot_vec = _mm_dp_ps(_data, rhs._data, 0x71);
-
         __m128 mag_vec = _mm_sqrt_ps(_mm_mul_ps(_mm_dp_ps(_data, _data, 0x71), _mm_dp_ps(rhs._data, rhs._data, 0x71)));
 
         float dot = _mm_cvtss_f32(dot_vec);
         float mag = _mm_cvtss_f32(mag_vec);
 
-        if (mag < 1e-6f) return 0.0f;
+        if (mag < 1e-6f)
+        {
+            throw std::domain_error("Cannot compute angle with a zero vector.");
+        }
 
-        float cos_theta = dot / mag;
-        cos_theta = std::max(-1.0f, std::min(1.0f, cos_theta));
-        cos_theta = std::clamp(-1.f, 1.f, cos_theta);
+        float cos_theta = std::clamp(dot / mag, -1.0f, 1.0f);
 
         return std::acos(cos_theta);
     }

@@ -23,6 +23,10 @@ namespace simd
         float getY() const;
         float getZ() const;
 
+        void setX(float value);
+        void setY(float value);
+        void setZ(float value);
+
         Vec3f operator+(const Vec3f& rhs) const;
         Vec3f operator-(const Vec3f& rhs) const;
         Vec3f operator*(const Vec3f& rhs) const;
@@ -60,4 +64,6 @@ namespace simd
     private:
         __m128 _data;
     };
+
+    Vec3f operator*(float scalar, const Vec3f& vector);
 }

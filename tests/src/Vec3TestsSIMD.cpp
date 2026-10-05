@@ -1,266 +1,270 @@
 #include <gtest/gtest.h>
-#include "TestHelpers.h"
-#include "mathLibSIMD/Vec3.h"
+#include "mathLibSIMD/include/Vec3f.hpp"
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
 
-using namespace TestHelpers;
-
-namespace MathStarterTests
+namespace SimdVec3Tests
 {
-    class Vec3Tests : public ::testing::Test {};
+    using V = simd::Vec3f;
 
-    using FloatingPointTypes = ::testing::Types<float, double>;
-    TYPED_TEST_SUITE(Vec3Tests, FloatingPointTypes);
-
-    TYPED_TEST(Vec3Tests, DefaultConstructorIsZero)
+    namespace
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V actual;
-        VectorNear(V{ 0, 0, 0 }, actual);
+        constexpr float kEpsilon = 1e-5f;
+
+        void ExpectNear(float expected, float actual)
+        {
+            const float tolerance = kEpsilon * std::max(1.0f, std::abs(expected));
+            EXPECT_NEAR(expected, actual, tolerance);
+        }
+
+        void ExpectVecNear(const V& expected, const V& actual)
+        {
+            ExpectNear(expected.getX(), actual.getX());
+            ExpectNear(expected.getY(), actual.getY());
+            ExpectNear(expected.getZ(), actual.getZ());
+        }
     }
 
-    TYPED_TEST(Vec3Tests, ComponentsAndCopyAreIndependent)
+    TEST(Vec3TestsSIMD, DefaultConstructorIsZero)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
+        const V actual;
+        ExpectVecNear(V{ 0, 0, 0 }, actual);
+    }
+
+    TEST(Vec3TestsSIMD, CopyIsIndependent)
+    {
         const V original{ 1, 2, 3 };
         V copy = original;
-        copy.x = T{ 99 };
-        VectorNear(V{ 1, 2, 3 }, original);
-        EXPECT_TRUE(copy.x == T{ 99 });
+        copy.setX(99.0f);
+        ExpectVecNear(V{ 1, 2, 3 }, original);
+        EXPECT_EQ(99.0f, copy.getX());
     }
 
-    TYPED_TEST(Vec3Tests, ExplicitConversionPreservesValues)
+    TEST(Vec3TestsSIMD, GettersReturnComponentsInOrder)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const simd::Vec3<double> source{ 1.5, 2.5, 3.5 };
-        const V actual(source);
-        VectorNear(V{ T{1.5}, T{2.5}, T{3.5} }, actual);
+        const V v{ 1, 2, 3 };
+        EXPECT_EQ(1.0f, v.getX());
+        EXPECT_EQ(2.0f, v.getY());
+        EXPECT_EQ(3.0f, v.getZ());
     }
 
-    TYPED_TEST(Vec3Tests, AdditionHasKnownResult)
+    TEST(Vec3TestsSIMD, SettersOnlyModifyTheirComponent)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 1, 2, 3 };
-        const V b = V{ 2, 3, 4 };
-        const V actual = a + b;
-        VectorNear(V{ 3, 5, 7 }, actual);
+        V v{ 1, 2, 3 };
+        v.setX(10.0f);
+        ExpectVecNear(V{ 10, 2, 3 }, v);
+        v.setY(20.0f);
+        ExpectVecNear(V{ 10, 20, 3 }, v);
+        v.setZ(30.0f);
+        ExpectVecNear(V{ 10, 20, 30 }, v);
     }
 
-    TYPED_TEST(Vec3Tests, SubtractionHasKnownResult)
+    TEST(Vec3TestsSIMD, AdditionHasKnownResult)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 1, 2, 3 };
-        const V b = V{ 2, 3, 4 };
-        const V actual = a - b;
-        VectorNear(V{ -1, -1, -1 }, actual);
+        const V a{ 1, 2, 3 };
+        const V b{ 2, 3, 4 };
+        ExpectVecNear(V{ 3, 5, 7 }, a + b);
     }
 
-    TYPED_TEST(Vec3Tests, ComponentProductHasKnownResult)
+    TEST(Vec3TestsSIMD, SubtractionHasKnownResult)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 1, 2, 3 };
-        const V b = V{ 2, 3, 4 };
-        const V actual = a * b;
-        VectorNear(V{ 2, 6, 12 }, actual);
+        const V a{ 1, 2, 3 };
+        const V b{ 2, 3, 4 };
+        ExpectVecNear(V{ -1, -1, -1 }, a - b);
     }
 
-    TYPED_TEST(Vec3Tests, ComponentDivisionHasKnownResult)
+    TEST(Vec3TestsSIMD, ComponentProductHasKnownResult)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 2, 6, 12 };
-        const V b = V{ 2, 3, 4 };
-        const V actual = a / b;
-        VectorNear(V{ 1, 2, 3 }, actual);
+        const V a{ 1, 2, 3 };
+        const V b{ 2, 3, 4 };
+        ExpectVecNear(V{ 2, 6, 12 }, a * b);
     }
 
-    TYPED_TEST(Vec3Tests, ScalarOperationsAndNegation)
+    TEST(Vec3TestsSIMD, ComponentDivisionHasKnownResult)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 1, 2, 3 };
-        VectorNear(V{ -1, -2, -3 }, -a);
-        VectorNear(V{ 2, 4, 6 }, a * T{ 2 });
-        VectorNear(V{ 2, 4, 6 }, T{ 2 } *a);
-        VectorNear(a, (a * T{ 2 }) / T{ 2 });
+        const V a{ 2, 6, 12 };
+        const V b{ 2, 3, 4 };
+        ExpectVecNear(V{ 1, 2, 3 }, a / b);
     }
 
-    TYPED_TEST(Vec3Tests, CompoundOperatorsReturnSelfAndSupportAliasing)
+    TEST(Vec3TestsSIMD, ComponentDivisionByZeroComponentThrows)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        V a = V{ 1, 2, 3 };
+        const V a{ 1, 2, 3 };
+        EXPECT_THROW((void)(a / V{ 0, 1, 1 }), std::domain_error);
+        EXPECT_THROW((void)(a / V{ 1, 0, 1 }), std::domain_error);
+        EXPECT_THROW((void)(a / V{ 1, 1, 0 }), std::domain_error);
+        EXPECT_THROW((void)(a / 0.0f), std::domain_error);
+    }
+
+    TEST(Vec3TestsSIMD, ScalarOperationsAndNegation)
+    {
+        const V a{ 1, 2, 3 };
+        ExpectVecNear(V{ -1, -2, -3 }, -a);
+        ExpectVecNear(V{ 2, 4, 6 }, a * 2.0f);
+        ExpectVecNear(V{ 2, 4, 6 }, 2.0f * a);
+        ExpectVecNear(a, (a * 2.0f) / 2.0f);
+    }
+
+    TEST(Vec3TestsSIMD, CompoundOperatorsReturnSelfAndSupportAliasing)
+    {
+        V a{ 1, 2, 3 };
         EXPECT_TRUE(&(a += a) == &a);
-        VectorNear(V{ 2, 4, 6 }, a);
+        ExpectVecNear(V{ 2, 4, 6 }, a);
         a -= V{ 1, 2, 3 };
         a *= a;
-        VectorNear(V{ 1, 4, 9 }, a);
+        ExpectVecNear(V{ 1, 4, 9 }, a);
         a /= V{ 1, 2, 3 };
-        a *= T{ 2 };
-        a /= T{ 2 };
-        VectorNear(V{ 1, 2, 3 }, a);
+        a *= 2.0f;
+        a /= 2.0f;
+        ExpectVecNear(V{ 1, 2, 3 }, a);
     }
 
-    TYPED_TEST(Vec3Tests, DivisionByZeroThrowsWithoutPartialMutation)
+    TEST(Vec3TestsSIMD, DivisionByZeroThrowsWithoutPartialMutation)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V original = V{ 1, 2, 3 };
+        const V original{ 1, 2, 3 };
         V actual = original;
-        EXPECT_THROW(actual /= T{ 0 }, std::domain_error);
-        VectorNear(original, actual);
+        EXPECT_THROW(actual /= 0.0f, std::domain_error);
+        ExpectVecNear(original, actual);
         EXPECT_THROW((actual /= V{ 0, 1, 1 }), std::domain_error);
-        VectorNear(original, actual);
+        ExpectVecNear(original, actual);
         EXPECT_THROW((actual /= V{ 1, 0, 1 }), std::domain_error);
-        VectorNear(original, actual);
+        ExpectVecNear(original, actual);
         EXPECT_THROW((actual /= V{ 1, 1, 0 }), std::domain_error);
-        VectorNear(original, actual);
+        ExpectVecNear(original, actual);
     }
 
-    TYPED_TEST(Vec3Tests, EqualityChecksEveryComponentExactly)
+    TEST(Vec3TestsSIMD, EqualityChecksEveryComponentExactly)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 1, 2, 3 };
+        const V a{ 1, 2, 3 };
         EXPECT_TRUE(a == a);
+        EXPECT_FALSE(a != a);
+
         V changedx = a;
-        changedx.x += T{ 1 };
+        changedx.setX(changedx.getX() + 1.0f);
         EXPECT_TRUE(changedx != a);
+        EXPECT_FALSE(changedx == a);
+
         V changedy = a;
-        changedy.y += T{ 1 };
+        changedy.setY(changedy.getY() + 1.0f);
         EXPECT_TRUE(changedy != a);
+        EXPECT_FALSE(changedy == a);
+
         V changedz = a;
-        changedz.z += T{ 1 };
+        changedz.setZ(changedz.getZ() + 1.0f);
         EXPECT_TRUE(changedz != a);
+        EXPECT_FALSE(changedz == a);
+
         V nan = a;
-        nan.x = std::numeric_limits<T>::quiet_NaN();
+        nan.setX(std::numeric_limits<float>::quiet_NaN());
         EXPECT_FALSE(nan == nan);
     }
 
-    TYPED_TEST(Vec3Tests, DotHasKnownResult)
+    TEST(Vec3TestsSIMD, DotHasKnownResult)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 1, 2, 3 };
-        const V b = V{ 2, 3, 4 };
-        Near(T{ 20 }, a.Dot(b));
+        const V a{ 1, 2, 3 };
+        const V b{ 2, 3, 4 };
+        ExpectNear(20.0f, a.Dot(b));
     }
 
-    TYPED_TEST(Vec3Tests, MagnitudeHasKnownResult)
+    TEST(Vec3TestsSIMD, MagnitudeHasKnownResult)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 3, 4, 0 };
-        Near(T{ 25 }, a.MagnitudeSquared());
-        Near(T{ 5 }, a.Magnitude());
-        Near(T{ 0 }, V{}.Magnitude());
+        const V a{ 3, 4, 0 };
+        ExpectNear(25.0f, a.MagnitudeSquared());
+        ExpectNear(5.0f, a.Magnitude());
+        ExpectNear(0.0f, V{}.Magnitude());
     }
 
-    TYPED_TEST(Vec3Tests, NormalizeReturnsNewUnitVector)
+    TEST(Vec3TestsSIMD, NormalizeReturnsNewUnitVector)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 3, 4, 0 };
+        const V a{ 3, 4, 0 };
         const V actual = a.Normalize();
-        VectorNear(V{ T{0.6}, T{0.8}, T{0} }, actual);
-        Near(T{ 1 }, actual.Magnitude());
-        VectorNear(V{ 3, 4, 0 }, a);
+        ExpectVecNear(V{ 0.6f, 0.8f, 0.0f }, actual);
+        ExpectNear(1.0f, actual.Magnitude());
+        ExpectVecNear(V{ 3, 4, 0 }, a);
     }
 
-    TYPED_TEST(Vec3Tests, NormalizeRejectsZeroAndNonFinite)
+    TEST(Vec3TestsSIMD, NormalizeRejectsZeroAndNonFinite)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
         EXPECT_THROW((void)V {}.Normalize(), std::domain_error);
-        V invalid = V{ 1, 2, 3 };
-        invalid.x = std::numeric_limits<T>::infinity();
+        V invalid{ 1, 2, 3 };
+        invalid.setX(std::numeric_limits<float>::infinity());
         EXPECT_THROW((void)invalid.Normalize(), std::domain_error);
-        invalid.x = std::numeric_limits<T>::quiet_NaN();
+        invalid.setX(std::numeric_limits<float>::quiet_NaN());
         EXPECT_THROW((void)invalid.Normalize(), std::domain_error);
     }
 
-    TYPED_TEST(Vec3Tests, NormalizeHandlesVeryLargeAndSmallFiniteValues)
+    TEST(Vec3TestsSIMD, NormalizeHandlesVeryLargeAndSmallFiniteValues)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const T large = std::numeric_limits<T>::max();
-        const T small = std::numeric_limits<T>::min();
-        const V expected = V{ T{1}, T{1}, T{1} } / std::sqrt(T{ 3 });
-        VectorNear(expected, V{ large, large, large }.Normalize());
-        VectorNear(expected, V{ small, small, small }.Normalize());
+        const float large = std::numeric_limits<float>::max();
+        const float small = std::numeric_limits<float>::min();
+        const V expected = V{ 1, 1, 1 } / std::sqrt(3.0f);
+        ExpectVecNear(expected, V{ large, large, large }.Normalize());
+        ExpectVecNear(expected, V{ small, small, small }.Normalize());
     }
 
-    TYPED_TEST(Vec3Tests, DistanceHasKnownResult)
+    TEST(Vec3TestsSIMD, DistanceHasKnownResult)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 1, 2, 3 };
-        const V b = V{ 4, 6, 3 };
-        Near(T{ 25 }, a.DistanceSquared(b));
-        Near(T{ 5 }, a.Distance(b));
+        const V a{ 1, 2, 3 };
+        const V b{ 4, 6, 3 };
+        ExpectNear(25.0f, a.DistanceSquared(b));
+        ExpectNear(5.0f, a.Distance(b));
     }
 
-    TYPED_TEST(Vec3Tests, AngleUsesRadians)
+    TEST(Vec3TestsSIMD, AngleUsesRadians)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        Near(std::numbers::pi_v<T> / T{ 2 }, V::UnitX.Angle(V::UnitY));
-        Near(std::numbers::pi_v<T>, V::UnitX.Angle(-V::UnitX));
-        Near(T{ 0 }, V::UnitX.Angle(V::UnitX));
+        ExpectNear(std::numbers::pi_v<float> / 2.0f, V::UnitX.Angle(V::UnitY));
+        ExpectNear(std::numbers::pi_v<float>, V::UnitX.Angle(-V::UnitX));
+        ExpectNear(0.0f, V::UnitX.Angle(V::UnitX));
         EXPECT_THROW((void)V::Zero.Angle(V::UnitX), std::domain_error);
+        EXPECT_THROW((void)V::UnitX.Angle(V::Zero), std::domain_error);
     }
 
-    TYPED_TEST(Vec3Tests, LerpSupportsEndpointsMidpointAndExtrapolation)
+    TEST(Vec3TestsSIMD, LerpSupportsEndpointsMidpointAndExtrapolation)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 0, 0, 0 };
-        const V b = V{ 2, 4, 6 };
-        VectorNear(a, V::Lerp(a, b, T{ 0 }));
-        VectorNear(b, V::Lerp(a, b, T{ 1 }));
-        VectorNear(V{ 1, 2, 3 }, V::Lerp(a, b, T{ 0.5 }));
-        VectorNear(V{ 4, 8, 12 }, V::Lerp(a, b, T{ 2 }));
+        const V a{ 0, 0, 0 };
+        const V b{ 2, 4, 6 };
+        ExpectVecNear(a, V::Lerp(a, b, 0.0f));
+        ExpectVecNear(b, V::Lerp(a, b, 1.0f));
+        ExpectVecNear(V{ 1, 2, 3 }, V::Lerp(a, b, 0.5f));
+        ExpectVecNear(V{ 4, 8, 12 }, V::Lerp(a, b, 2.0f));
     }
 
-    TYPED_TEST(Vec3Tests, MinMaxAreComponentWise)
+    TEST(Vec3TestsSIMD, MinMaxAreComponentWise)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        const V a = V{ 1, -4, 7 };
-        const V b = V{ 3, -2, 5 };
-        VectorNear(V{ 1, -4, 5 }, V::Min(a, b));
-        VectorNear(V{ 3, -2, 7 }, V::Max(a, b));
+        const V a{ 1, -4, 7 };
+        const V b{ 3, -2, 5 };
+        ExpectVecNear(V{ 1, -4, 5 }, V::Min(a, b));
+        ExpectVecNear(V{ 3, -2, 7 }, V::Max(a, b));
     }
 
-    TYPED_TEST(Vec3Tests, NamedConstantsHaveExpectedComponents)
+    TEST(Vec3TestsSIMD, NamedConstantsHaveExpectedComponents)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        VectorNear(V{ 0, 0, 0 }, V::Zero);
-        VectorNear(V{ 1, 1, 1 }, V::One);
-        VectorNear(V{ 1, 0, 0 }, V::UnitX);
-        VectorNear(V{ 0, 1, 0 }, V::UnitY);
-        VectorNear(V{ 0, 0, 1 }, V::UnitZ);
+        ExpectVecNear(V{ 0, 0, 0 }, V::Zero);
+        ExpectVecNear(V{ 1, 1, 1 }, V::One);
+        ExpectVecNear(V{ 1, 0, 0 }, V::UnitX);
+        ExpectVecNear(V{ 0, 1, 0 }, V::UnitY);
+        ExpectVecNear(V{ 0, 0, 1 }, V::UnitZ);
     }
 
-    TYPED_TEST(Vec3Tests, CrossUsesRightHandedOrientation)
+    TEST(Vec3TestsSIMD, CrossUsesRightHandedOrientation)
     {
-        using T = TypeParam;
-        using V = simd::Vec3f;
-        VectorNear(V{ 0, 0, 1 }, V::UnitX.Cross(V::UnitY));
-        VectorNear(V{ 0, 0, -1 }, V::UnitY.Cross(V::UnitX));
+        ExpectVecNear(V{ 0, 0, 1 }, V::UnitX.Cross(V::UnitY));
+        ExpectVecNear(V{ 0, 0, -1 }, V::UnitY.Cross(V::UnitX));
         const V a{ 1, 2, 3 };
         const V b{ 4, 5, 6 };
-        VectorNear(V{ -3, 6, -3 }, a.Cross(b));
-        VectorNear(V::Zero, a.Cross(a));
+        ExpectVecNear(V{ -3, 6, -3 }, a.Cross(b));
+        ExpectVecNear(V::Zero, a.Cross(a));
+    }
+
+    TEST(Vec3TestsSIMD, IsSixteenByteAligned)
+    {
+        static_assert(alignof(V) == 16);
+        static_assert(sizeof(V) == 16);
+        const V v{ 1, 2, 3 };
+        EXPECT_EQ(0u, reinterpret_cast<std::uintptr_t>(&v) % 16u);
     }
 }
