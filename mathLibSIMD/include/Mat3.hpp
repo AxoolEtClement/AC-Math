@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Vec3.h"
+#include "Vec3f.hpp"
 #include <array>
 #include <limits>
 #include <utility>
+#include <immintrin.h>
 
 namespace simd
 {
@@ -12,7 +13,7 @@ namespace simd
     class Matrix3x3
     {
     public:
-        float values[3][3];
+        
 
         Matrix3x3(); // Identity.
         explicit Matrix3x3(const std::array<float, 9>& elements);
@@ -36,5 +37,8 @@ namespace simd
         static Matrix3x3 RotationX(float radians);
         static Matrix3x3 RotationY(float radians);
         static Matrix3x3 RotationZ(float radians);
+
+    private:
+        std::array<__m128, 3> _data; // Each row is a __m128, with the last element unused.
     };
 }
