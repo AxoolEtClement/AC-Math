@@ -36,7 +36,7 @@ namespace simd
         {
             throw std::out_of_range("Matrix index is out of range");
         }
-        return _data[row][column];
+        return _data[row].m128_f32[column];
     }
 
     const float& Matrix4x4::operator()(std::size_t row, std::size_t column) const
@@ -45,7 +45,7 @@ namespace simd
         {
             throw std::out_of_range("Matrix index is out of range");
         }
-        return _data[row][column];
+        return _data[row].m128_f32[column];
     }
 
     Matrix4x4 Matrix4x4::operator+(const Matrix4x4& rhs) const
@@ -110,10 +110,12 @@ namespace simd
     Matrix4x4 Matrix4x4::operator*(float scalar) const
     {
         Matrix4x4 result = Zero();
-        for (std::size_t row = 0; row < 4; ++row)
-        {
-            result._data[row] = _mm_mul_ps(_data[row], _mm_set1_ps(scalar));
-        }
+
+		result._data[0] = _mm_mul_ps(_data[0], _mm_set1_ps(scalar));
+		result._data[1] = _mm_mul_ps(_data[1], _mm_set1_ps(scalar));
+		result._data[2] = _mm_mul_ps(_data[2], _mm_set1_ps(scalar));
+		result._data[3] = _mm_mul_ps(_data[3], _mm_set1_ps(scalar));
+
         return result;
     }
 
@@ -141,106 +143,111 @@ namespace simd
     Matrix4x4 Matrix4x4::Transpose() const
     {
         Matrix4x4 result = Zero();
-        for (std::size_t row = 0; row < 4; ++row)
-        {
-            for (std::size_t column = 0; column < 4; ++column)
-            {
-                result.values[column][row] = values[row][column];
-            }
-        }
+
+		__m128 r0 = _data[0];
+        __m128 r1 = _data[1];
+        __m128 r2 = _data[2];
+        __m128 r3 = _data[3];
+
+		_MM_TRANSPOSE4_PS(r0, r1, r2, r3);
+
+		result._data[0] = r0;
+		result._data[1] = r1;
+		result._data[2] = r2;
+		result._data[3] = r3;
+
         return result;
     }
 
-    T Matrix4x4::Determinant() const
+    float Matrix4x4::Determinant() const
     {
-        Matrix4x4 working = *this;
-        T determinant = T{ 1 };
-        for (std::size_t column = 0; column < 4; ++column)
-        {
-            std::size_t pivot = column;
-            for (std::size_t row = column + 1; row < 4; ++row)
-            {
-                if (std::abs(working.values[row][column]) > std::abs(working.values[pivot][column]))
-                {
-                    pivot = row;
-                }
-            }
-            if (working.values[pivot][column] == T{ 0 })
-            {
-                return T{ 0 };
-            }
-            if (pivot != column)
-            {
-                for (std::size_t j = 0; j < 4; ++j)
-                {
-                    std::swap(working.values[pivot][j], working.values[column][j]);
-                }
-                determinant = -determinant;
-            }
-            const T diagonal = working.values[column][column];
-            determinant *= diagonal;
-            for (std::size_t row = column + 1; row < 4; ++row)
-            {
-                const T factor = working.values[row][column] / diagonal;
-                for (std::size_t j = column + 1; j < 4; ++j)
-                {
-                    working.values[row][j] -= factor * working.values[column][j];
-                }
-            }
-        }
-        return determinant;
+        float m[4][4];
+        _mm_storeu_ps(m[0], _data[0]);
+        _mm_storeu_ps(m[1], _data[1]);
+        _mm_storeu_ps(m[2], _data[2]);
+        _mm_storeu_ps(m[3], _data[3]);
+
+		// Helper lambda to compute the determinant of the sub 3x3 matrix
+        auto det3 = [](float m00, float m01, float m02,
+            float m10, float m11, float m12,
+            float m20, float m21, float m22) {
+                return m00 * (m11 * m22 - m12 * m21) -
+                    m01 * (m10 * m22 - m12 * m20) +
+                    m02 * (m10 * m21 - m11 * m20);
+            };
+
+        float sub0 = det3(m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], m[3][3]);
+        float sub1 = det3(m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], m[3][3]);
+        float sub2 = det3(m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], m[3][3]);
+        float sub3 = det3(m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], m[3][2]);
+
+        return m[0][0] * sub0 - m[0][1] * sub1 + m[0][2] * sub2 - m[0][3] * sub3;
     }
 
-    Matrix4x4 Matrix4x4::Inverse(T relativeTolerance) const
+    Matrix4x4 Matrix4x4::Inverse(float relativeTolerance) const
     {
-        if (!std::isfinite(relativeTolerance) || relativeTolerance < T{ 0 } || relativeTolerance >= T{ 1 })
+        if (!std::isfinite(relativeTolerance) || relativeTolerance < 0.f || relativeTolerance >= 1.f)
         {
             throw std::invalid_argument("Inverse tolerance must be finite and in [0, 1)");
         }
-        Matrix4x4 left = *this;
-        Matrix4x4 right;
-        T scales[4]{};
+
+        float l[4][4];
+        _mm_storeu_ps(l[0], _data[0]);
+        _mm_storeu_ps(l[1], _data[1]);
+        _mm_storeu_ps(l[2], _data[2]);
+        _mm_storeu_ps(l[3], _data[3]);
+
+        float r[4][4] = {
+            {1.f, 0.f, 0.f, 0.f},
+            {0.f, 1.f, 0.f, 0.f},
+            {0.f, 0.f, 1.f, 0.f},
+            {0.f, 0.f, 0.f, 1.f}
+        };
+
+        float scales[4]{};
         for (std::size_t row = 0; row < 4; ++row)
         {
             for (std::size_t column = 0; column < 4; ++column)
             {
-                if (!std::isfinite(left.values[row][column]))
+                if (!std::isfinite(l[row][column]))
                 {
                     throw std::domain_error("Cannot invert a non-finite matrix");
                 }
-                scales[row] = std::max(scales[row], std::abs(left.values[row][column]));
+                scales[row] = std::max(scales[row], std::abs(l[row][column]));
             }
-            if (scales[row] == T{ 0 })
+            if (scales[row] == 0.f)
             {
                 throw std::domain_error("Cannot invert a singular matrix");
             }
         }
+
         for (std::size_t column = 0; column < 4; ++column)
         {
             std::size_t pivot = column;
             for (std::size_t row = column + 1; row < 4; ++row)
             {
-                if (std::abs(left.values[row][column]) / scales[row] >
-                    std::abs(left.values[pivot][column]) / scales[pivot])
+                if (std::abs(l[row][column]) / scales[row] >
+                    std::abs(l[pivot][column]) / scales[pivot])
                 {
                     pivot = row;
                 }
             }
-            if (std::abs(left.values[pivot][column]) / scales[pivot] <= relativeTolerance)
+            if (std::abs(l[pivot][column]) / scales[pivot] <= relativeTolerance)
             {
                 throw std::domain_error("Matrix is singular or too ill-conditioned");
             }
             for (std::size_t j = 0; j < 4; ++j)
             {
-                std::swap(left.values[column][j], left.values[pivot][j]);
-                std::swap(right.values[column][j], right.values[pivot][j]);
+                std::swap(l[column][j], l[pivot][j]);
+                std::swap(r[column][j], r[pivot][j]);
             }
             std::swap(scales[column], scales[pivot]);
-            const T diagonal = left.values[column][column];
+
+            const float diagonal = l[column][column];
             for (std::size_t j = 0; j < 4; ++j)
             {
-                left.values[column][j] /= diagonal;
-                right.values[column][j] /= diagonal;
+                l[column][j] /= diagonal;
+                r[column][j] /= diagonal;
             }
             for (std::size_t row = 0; row < 4; ++row)
             {
@@ -248,100 +255,122 @@ namespace simd
                 {
                     continue;
                 }
-                const T factor = left.values[row][column];
+                const float factor = l[row][column];
                 for (std::size_t j = 0; j < 4; ++j)
                 {
-                    left.values[row][j] -= factor * left.values[column][j];
-                    right.values[row][j] -= factor * right.values[column][j];
+                    l[row][j] -= factor * l[column][j];
+                    r[row][j] -= factor * r[column][j];
                 }
             }
         }
+
         for (std::size_t row = 0; row < 4; ++row)
         {
             for (std::size_t column = 0; column < 4; ++column)
             {
-                if (!std::isfinite(right.values[row][column]))
+                if (!std::isfinite(r[row][column]))
                 {
                     throw std::domain_error("Inverse is not representable");
                 }
             }
         }
-        return right;
+
+        Matrix4x4 result;
+        result._data[0] = _mm_loadu_ps(r[0]);
+        result._data[1] = _mm_loadu_ps(r[1]);
+        result._data[2] = _mm_loadu_ps(r[2]);
+        result._data[3] = _mm_loadu_ps(r[3]);
+
+        return result;
     }
 
     Matrix4x4 Matrix4x4::Scale(const Vec3f& scale)
     {
         Matrix4x4 result;
-        result.values[0][0] = scale.x;
-        result.values[1][1] = scale.y;
-        result.values[2][2] = scale.z;
+		result._data[0] = _mm_setr_ps(scale.getX(), 0.f, 0.f, 0.f);
+		result._data[1] = _mm_setr_ps(0.f, scale.getX(), 0.f, 0.f);
+		result._data[2] = _mm_setr_ps(0.f, 0.f, scale.getZ(), 0.f);
+
         return result;
     }
 
-    Matrix4x4 Matrix4x4::RotationX(T radians)
+    Matrix4x4 Matrix4x4::RotationX(float radians)
     {
         Matrix4x4 result;
-        const T cosine = std::cos(radians);
-        const T sine = std::sin(radians);
-        result.values[1][1] = cosine;
-        result.values[2][2] = cosine;
-        result.values[1][2] = -sine;
-        result.values[2][1] = sine;
+        const float cosine = std::cos(radians);
+        const float sine = std::sin(radians);
+
+        result._data[0] = _mm_setr_ps(1.f, 0.f, 0.f, 0.f);
+        result._data[1] = _mm_setr_ps(0.f, cosine, -sine, 0.f);
+        result._data[2] = _mm_setr_ps(0.f, sine, cosine, 0.f);
+        result._data[3] = _mm_setr_ps(0.f, 0.f, 0.f, 1.f);
         return result;
     }
 
-    Matrix4x4 Matrix4x4::RotationY(T radians)
+    Matrix4x4 Matrix4x4::RotationY(float radians)
     {
         Matrix4x4 result;
-        const T cosine = std::cos(radians);
-        const T sine = std::sin(radians);
-        result.values[2][2] = cosine;
-        result.values[0][0] = cosine;
-        result.values[2][0] = -sine;
-        result.values[0][2] = sine;
+        const float cosine = std::cos(radians);
+        const float sine = std::sin(radians);
+
+        result._data[0] = _mm_setr_ps(cosine, 0.f, sine, 0.f);
+        result._data[1] = _mm_setr_ps(0.f, 1.f, 0.f, 0.f);
+        result._data[2] = _mm_setr_ps(-sine, 0.f, cosine, 0.f);
+        result._data[3] = _mm_setr_ps(0.f, 0.f, 0.f, 1.f);
         return result;
     }
 
-    Matrix4x4 Matrix4x4::RotationZ(T radians)
+    Matrix4x4 Matrix4x4::RotationZ(float radians)
     {
         Matrix4x4 result;
-        const T cosine = std::cos(radians);
-        const T sine = std::sin(radians);
-        result.values[0][0] = cosine;
-        result.values[1][1] = cosine;
-        result.values[0][1] = -sine;
-        result.values[1][0] = sine;
+        const float cosine = std::cos(radians);
+        const float sine = std::sin(radians);
+
+        result._data[0] = _mm_setr_ps(cosine, -sine, 0.f, 0.f);
+        result._data[1] = _mm_setr_ps(sine, cosine, 0.f, 0.f);
+        result._data[2] = _mm_setr_ps(0.f, 0.f, 1.f, 0.f);
+        result._data[3] = _mm_setr_ps(0.f, 0.f, 0.f, 1.f);
         return result;
     }
 
     Matrix4x4 Matrix4x4::Translation(const Vec3f& offset)
     {
         Matrix4x4 result;
-        result.values[0][3] = offset.x;
-        result.values[1][3] = offset.y;
-        result.values[2][3] = offset.z;
+
+        result._data[0] = _mm_setr_ps(1.f, 0.f, 0.f, offset.getX());
+        result._data[1] = _mm_setr_ps(0.f, 1.f, 0.f, offset.getY());
+        result._data[2] = _mm_setr_ps(0.f, 0.f, 1.f, offset.getZ());
+        result._data[3] = _mm_setr_ps(0.f, 0.f, 0.f, 1.f);
         return result;
     }
 
     Vec3f Matrix4x4::TransformPoint(const Vec3f& point) const
     {
-        if (values[3][0] != T{ 0 } || values[3][1] != T{ 0 } ||
-            values[3][2] != T{ 0 } || values[3][3] != T{ 1 })
+        float row3[4];
+        _mm_storeu_ps(row3, _data[3]);
+
+        if (row3[0] != 0.f || row3[1] != 0.f ||
+            row3[2] != 0.f || row3[3] != 1.f)
         {
             throw std::domain_error("Transform requires an affine matrix");
         }
-        const Vec4 result = *this * Vec4(point.x, point.y, point.z, T{ 1 });
-        return { result.x, result.y, result.z };
+
+        const Vec4 result = *this * Vec4(point.getX(), point.getY(), point.getZ(), 1.f);
+        return { result.getX(), result.getY(), result.getZ() };
     }
 
     Vec3f Matrix4x4::TransformDirection(const Vec3f& direction) const
     {
-        if (values[3][0] != T{ 0 } || values[3][1] != T{ 0 } ||
-            values[3][2] != T{ 0 } || values[3][3] != T{ 1 })
+        float row3[4];
+        _mm_storeu_ps(row3, _data[3]);
+
+        if (row3[0] != 0.f || row3[1] != 0.f ||
+            row3[2] != 0.f || row3[3] != 1.f)
         {
             throw std::domain_error("Transform requires an affine matrix");
         }
-        const Vec4 result = *this * Vec4(direction.x, direction.y, direction.z, T{ 0 });
-        return { result.x, result.y, result.z };
+
+        const Vec4 result = *this * Vec4(direction.getX(), direction.getY(), direction.getZ(), 0.f);
+        return { result.getX(), result.getY(), result.getZ()};
     }
 }
