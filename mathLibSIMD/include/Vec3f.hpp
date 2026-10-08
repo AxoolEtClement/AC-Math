@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <immintrin.h>
 
+class Matrix3x3; // Forward declaration to avoid circular dependency with Vec3f.
 namespace simd
 {
     class alignas(16) Vec3f
@@ -16,7 +17,8 @@ namespace simd
         Vec3f();
         Vec3f(float x, float y, float z);
 
-        Vec3f(const Vec3f& other);
+        Vec3f(const Vec3f&) = default;
+        Vec3f& operator=(const Vec3f&) = default;
         Vec3f(__m128 data);
 
         float getX() const;
@@ -60,6 +62,8 @@ namespace simd
         static const Vec3f UnitX;
         static const Vec3f UnitY;
         static const Vec3f UnitZ;
+
+        friend class Matrix3x3;
 
     private:
         __m128 _data;
