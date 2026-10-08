@@ -7,8 +7,10 @@
 #include <immintrin.h>
 
 
+
 namespace simd
 {
+    class Matrix4x4;
     class alignas(16) Vec4
     {
     public:
@@ -64,7 +66,7 @@ namespace simd
         static const Vec4 UnitZ;
         static const Vec4 UnitW;
 
-        
+        friend class Matrix4x4;
 
     private:
         __m128 _data;
