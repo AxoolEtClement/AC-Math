@@ -288,7 +288,7 @@ namespace simd
     {
         Matrix4x4 result;
 		result._data[0] = _mm_setr_ps(scale.getX(), 0.f, 0.f, 0.f);
-		result._data[1] = _mm_setr_ps(0.f, scale.getX(), 0.f, 0.f);
+		result._data[1] = _mm_setr_ps(0.f, scale.getY(), 0.f, 0.f);
 		result._data[2] = _mm_setr_ps(0.f, 0.f, scale.getZ(), 0.f);
 
         return result;

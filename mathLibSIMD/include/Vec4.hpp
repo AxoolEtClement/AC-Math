@@ -6,10 +6,11 @@
 #include <stdexcept>
 #include <immintrin.h>
 
-class Matrix4x4;
+
 
 namespace simd
 {
+    class Matrix4x4;
     class alignas(16) Vec4
     {
     public:
