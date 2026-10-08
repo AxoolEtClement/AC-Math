@@ -1,5 +1,17 @@
 #include "Vec4.hpp"
 
+namespace
+{
+    inline __m128 DotVec4(__m128 a, __m128 b)
+    {
+        const __m128 m = _mm_mul_ps(a, b);
+        const __m128 shuf = _mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m128 sums = _mm_add_ps(m, shuf);
+        const __m128 shuf2 = _mm_shuffle_ps(sums, sums, _MM_SHUFFLE(2, 3, 0, 1));
+        return _mm_add_ps(sums, shuf2);
+    }
+}
+
 namespace simd
 {
 
@@ -14,12 +26,6 @@ namespace simd
 
     }
 
-
-    Vec4::Vec4(const Vec4& other) : _data{other._data}
-    {
-
-    }
-
     Vec4::Vec4(__m128 data) : _data{data}
     {
 
@@ -30,8 +36,7 @@ namespace simd
     float Vec4::getZ() const { return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(2, 2, 2, 2))); }
     float Vec4::getW() const { return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 3, 3, 3))); }
 
-    // _mm_insert_ps(dst, src, imm8) : bits 5:4 = lane de destination, bits 7:6 = lane source (0 ici)
-    void Vec4::setX(float value) { _data = _mm_move_ss(_data, _mm_set_ss(value)); }
+    void Vec4::setX(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x00); }
     void Vec4::setY(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x10); }
     void Vec4::setZ(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x20); }
     void Vec4::setW(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x30); }
@@ -107,21 +112,21 @@ namespace simd
 
     Vec4& Vec4::operator+=(const Vec4& rhs)
     {
-        *this = _mm_add_ps(this->_data, rhs._data);
+        _data = _mm_add_ps(_data, rhs._data);
         return *this;
     }
 
 
     Vec4& Vec4::operator-=(const Vec4& rhs)
     {
-        *this = _mm_sub_ps(this->_data, rhs._data);
+        _data = _mm_sub_ps(_data, rhs._data);
         return *this;
     }
 
 
     Vec4& Vec4::operator*=(const Vec4& rhs)
     {
-        *this = _mm_mul_ps(this->_data, rhs._data);
+        _data = _mm_mul_ps(_data, rhs._data);
         return *this;
     }
 
@@ -136,7 +141,7 @@ namespace simd
 
     Vec4& Vec4::operator*=(float scalar)
     {
-        *this = _mm_mul_ps(this->_data, _mm_set1_ps(scalar));
+        _data = _mm_mul_ps(_data, _mm_set1_ps(scalar));
         return *this;
     }
 
@@ -187,25 +192,21 @@ namespace simd
 
 #else
         // Fallback C++ / Linux ou MSVC 64-bit
-        __m128 mul = _mm_mul_ps(this->_data, rhs._data);
-        __m128 low = _mm_movehl_ps(mul, mul);
-        __m128 add1 = _mm_add_ps(mul, low);
-        __m128 shuf = _mm_shuffle_ps(add1, add1, 1);
-        __m128 add2 = _mm_add_ss(add1, shuf);
-        return _mm_cvtss_f32(add2);
+         return _mm_cvtss_f32(DotVec4(this->_data, rhs._data));
 #endif
+       
     }
 
 
     float Vec4::MagnitudeSquared() const
     {
-        return _mm_cvtss_f32(_mm_dp_ps(this->_data, this->_data, 0xFF));
+        return _mm_cvtss_f32(DotVec4(this->_data, this->_data));
     }
 
 
     float Vec4::Magnitude() const
     {
-        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(this->_data, this->_data, 0xFF)));
+        return _mm_cvtss_f32(_mm_sqrt_ps(DotVec4(this->_data, this->_data)));
     }
 
 
@@ -216,37 +217,28 @@ namespace simd
             throw std::domain_error("Cannot normalize non-finite components");
         }
 
-        // Scaling avoids overflowing/underflowing the squared magnitude.
         const float scale = std::max({std::abs(this->getX()), std::abs(this->getY()), std::abs(this->getZ()), std::abs(this->getW())});
         if (scale == 0.0f)
         {
             throw std::domain_error("Cannot normalize the zero vector");
         }
 
-        // On met d'abord à l'échelle (composantes dans [-1, 1]), puis on normalise
         const __m128 scaled = _mm_div_ps(this->_data, _mm_set1_ps(scale));
-        const __m128 length = _mm_sqrt_ps(_mm_dp_ps(scaled, scaled, 0xFF));
-        return _mm_div_ps(scaled, length);
+        return _mm_div_ps(scaled, _mm_sqrt_ps(DotVec4(scaled, scaled)));
     }
 
 
     float Vec4::DistanceSquared(const Vec4& rhs) const
     {
-        return _mm_cvtss_f32(_mm_dp_ps(_mm_sub_ps(this->_data, rhs._data), _mm_sub_ps(this->_data, rhs._data), 0xFF));
+        __m128 diff = _mm_sub_ps(this->_data, rhs._data);
+        return _mm_cvtss_f32(DotVec4(diff, diff));
     }
 
 
     float Vec4::Distance(const Vec4& rhs) const
     {
         __m128 diff = _mm_sub_ps(this->_data, rhs._data);
-
-        __m128 dp = _mm_dp_ps(diff, diff, 0xFF);
-
-        __m128 sq = _mm_sqrt_ps(dp);
-
-        float result;
-        _mm_store_ss(&result, sq);
-        return result;
+        return _mm_cvtss_f32(_mm_sqrt_ps(DotVec4(diff, diff)));
     }
 
 

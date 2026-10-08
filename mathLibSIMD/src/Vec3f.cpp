@@ -1,5 +1,16 @@
 #include "Vec3f.hpp"
 
+namespace
+{
+    inline __m128 DotVec3(__m128 a, __m128 b)
+    {
+        const __m128 m = _mm_mul_ps(a, b);
+        const __m128 y = _mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 1, 1, 1));
+        const __m128 z = _mm_shuffle_ps(m, m, _MM_SHUFFLE(2, 2, 2, 2));
+        return _mm_add_ps(_mm_add_ps(m, y), z);
+    }
+}
+
 namespace simd {
     Vec3f::Vec3f() : _data{ _mm_setzero_ps() }
     {
@@ -9,9 +20,9 @@ namespace simd {
     {
     }
 
-    Vec3f::Vec3f(const Vec3f& other) : _data{ other._data }
+    /*Vec3f::Vec3f(const Vec3f& other) : _data{ other._data }
     {
-    }
+    }*/
 
     Vec3f::Vec3f(__m128 data) : _data{ data }
     {
@@ -21,8 +32,7 @@ namespace simd {
     float Vec3f::getY() const { return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(1, 1, 1, 1))); }
     float Vec3f::getZ() const { return _mm_cvtss_f32(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(2, 2, 2, 2))); }
 
-    // _mm_insert_ps(dst, src, imm8) : bits 5:4 = lane de destination, bits 7:6 = lane source (0 ici)
-    void Vec3f::setX(float value) { _data = _mm_move_ss(_data, _mm_set_ss(value)); }
+    void Vec3f::setX(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x00); }
     void Vec3f::setY(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x10); }
     void Vec3f::setZ(float value) { _data = _mm_insert_ps(_data, _mm_set_ss(value), 0x20); }
 
@@ -149,21 +159,18 @@ namespace simd {
 
 #else
         // Fallback C++ / Linux ou MSVC 64-bit
-        __m128 mul = _mm_mul_ps(this->_data, rhs._data);
-        __m128 low = _mm_movehl_ps(mul, mul);
-        __m128 add1 = _mm_add_ps(mul, low);
-        __m128 shuf = _mm_shuffle_ps(add1, add1, 1);
-        __m128 add2 = _mm_add_ss(add1, shuf);
-        return _mm_cvtss_f32(add2);
+        return _mm_cvtss_f32(DotVec3(_data, rhs._data));
 #endif
     }
 
     Vec3f Vec3f::Cross(const Vec3f& rhs) const
     {
-        return { _mm_sub_ps(
-            _mm_mul_ps(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 0, 2, 1)), _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(3, 1, 0, 2))), 
-            _mm_mul_ps(_mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 1, 0, 2)), _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(3, 0, 2, 1)))
-        ) };
+        const __m128 a_yzx = _mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 0, 2, 1));
+        const __m128 b_zxy = _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(3, 1, 0, 2));
+        const __m128 a_zxy = _mm_shuffle_ps(_data, _data, _MM_SHUFFLE(3, 1, 0, 2));
+        const __m128 b_yzx = _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(3, 0, 2, 1));
+
+        return _mm_sub_ps(_mm_mul_ps(a_yzx, b_zxy), _mm_mul_ps(a_zxy, b_yzx));
 
 
         //return { y * rhs.z - z * rhs.y,
@@ -173,12 +180,12 @@ namespace simd {
 
     float Vec3f::MagnitudeSquared() const
     {
-        return _mm_cvtss_f32(_mm_dp_ps(_data, _data, 0x7F));
+        return _mm_cvtss_f32(DotVec3(_data, _data));
     }
 
     float Vec3f::Magnitude() const
     {
-        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(_data, _data, 0x7F)));
+        return _mm_cvtss_f32(_mm_sqrt_ps(DotVec3(_data, _data)));
     }
 
     Vec3f Vec3f::Normalize() const
@@ -188,7 +195,6 @@ namespace simd {
             throw std::domain_error("Cannot normalize non-finite components");
         }
 
-        // Scaling avoids overflowing/underflowing the squared magnitude.
         const float scale = std::max({ std::abs(this->getX()), std::abs(this->getY()), std::abs(this->getZ()) });
         if (scale == 0.f)
         {
@@ -196,19 +202,19 @@ namespace simd {
         }
 
         __m128 scaled = _mm_div_ps(_data, _mm_set_ps1(scale));
-        return { _mm_div_ps(scaled, _mm_sqrt_ps(_mm_dp_ps(scaled, scaled, 0x7F))) };
+        return { _mm_div_ps(scaled, _mm_sqrt_ps(DotVec3(scaled, scaled))) };
     }
 
     float Vec3f::DistanceSquared(const Vec3f& rhs) const
     {
-        __m128 diff{ _mm_sub_ps(_data, rhs._data) };
-        return _mm_cvtss_f32(_mm_dp_ps(diff, diff, 0x71));
+        __m128 diff = _mm_sub_ps(_data, rhs._data);
+        return _mm_cvtss_f32(DotVec3(diff, diff));
     }
 
     float Vec3f::Distance(const Vec3f& rhs) const
     {
-        __m128 diff{ _mm_sub_ps(_data, rhs._data) };
-        return _mm_cvtss_f32(_mm_sqrt_ps(_mm_dp_ps(diff, diff, 0x71)));
+        __m128 diff = _mm_sub_ps(_data, rhs._data);
+        return _mm_cvtss_f32(_mm_sqrt_ps(DotVec3(diff, diff)));
     }
 
     float Vec3f::Angle(const Vec3f& rhs) const
