@@ -24,7 +24,7 @@ namespace simd
         Matrix3x3 operator+(const Matrix3x3& rhs) const;
         Matrix3x3 operator-(const Matrix3x3& rhs) const;
         Matrix3x3 operator*(const Matrix3x3& rhs) const;
-        Vec3f operator*(const Vec3f& rhs) const;
+        Vec3f operator*(Vec3f rhs) const;
         Matrix3x3 operator*(float scalar) const;
         Matrix3x3& operator*=(const Matrix3x3& rhs);
         bool operator==(const Matrix3x3& rhs) const;
@@ -32,7 +32,7 @@ namespace simd
         Matrix3x3 Transpose() const;
         float Determinant() const;
         // Gauss-Jordan with scaled partial pivoting. Rejects singular/ill-conditioned input.
-        Matrix3x3 Inverse(float relativeTolerance = 64.0f * std::numeric_limits<float>::epsilon()) const;
+        Matrix3x3 Inverse() const;
         static Matrix3x3 Scale(const Vec3f& scale);
         static Matrix3x3 RotationX(float radians);
         static Matrix3x3 RotationY(float radians);

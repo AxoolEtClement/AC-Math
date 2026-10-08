@@ -15,7 +15,7 @@ namespace simd
 
         Vec4();
         Vec4(float _x, float _y, float _z, float _w);
-        Vec4(const Vec4& other);
+        Vec4(const Vec4&) = default;
         Vec4(__m128 data);
 
         float getX() const;
@@ -44,6 +44,7 @@ namespace simd
         Vec4& operator/=(float scalar);
         bool operator==(const Vec4& rhs) const;
         bool operator!=(const Vec4& rhs) const;
+        Vec4& operator=(const Vec4&) = default;
 
         float Dot(const Vec4& rhs) const;
         float MagnitudeSquared() const;

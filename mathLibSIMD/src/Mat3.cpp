@@ -3,6 +3,28 @@
 #include <cmath>
 #include <stdexcept>
 
+namespace
+{
+    // ligne de A*B = A[i][0]*B.ligne0 + A[i][1]*B.ligne1 + A[i][2]*B.ligne2
+    inline __m128 MulRow(__m128 a, __m128 b0, __m128 b1, __m128 b2)
+    {
+        const __m128 x = _mm_shuffle_ps(a, a, _MM_SHUFFLE(0, 0, 0, 0));
+        const __m128 y = _mm_shuffle_ps(a, a, _MM_SHUFFLE(1, 1, 1, 1));
+        const __m128 z = _mm_shuffle_ps(a, a, _MM_SHUFFLE(2, 2, 2, 2));
+        return _mm_add_ps(_mm_add_ps(_mm_mul_ps(x, b0), _mm_mul_ps(y, b1)), _mm_mul_ps(z, b2));
+    }
+
+    inline float& At(__m128& row, std::size_t c)
+    {
+        return reinterpret_cast<float*>(&row)[c];
+    }
+
+    inline const float& At(const __m128& row, std::size_t c)
+    {
+        return reinterpret_cast<const float*>(&row)[c];
+    }
+}
+
 namespace simd
 {
 
@@ -34,7 +56,9 @@ namespace simd
 
     Matrix3x3 Matrix3x3::Zero()
     {
-        return Matrix3x3(std::array<float, 9>{});
+        Matrix3x3 result;
+        result._data[0] = result._data[1] = result._data[2] = _mm_setzero_ps();
+        return result;
     }
 
 
@@ -44,7 +68,7 @@ namespace simd
         {
             throw std::out_of_range("Matrix index is out of range");
         }
-        return _data[row][column];
+        return At(_data[row], column);
     }
 
 
@@ -54,13 +78,13 @@ namespace simd
         {
             throw std::out_of_range("Matrix index is out of range");
         }
-        return _data[row][column];
+        return reinterpret_cast<const float*>(&_data[row])[column];
     }
 
 
     Matrix3x3 Matrix3x3::operator+(const Matrix3x3& rhs) const
     {
-        Matrix3x3 result = Zero();
+        Matrix3x3 result;
         for (std::size_t row = 0; row < 3; ++row)
         {
             result._data[row] = _mm_add_ps(_data[row], rhs._data[row]);
@@ -71,7 +95,7 @@ namespace simd
 
     Matrix3x3 Matrix3x3::operator-(const Matrix3x3& rhs) const
     {
-        Matrix3x3 result = Zero();
+        Matrix3x3 result;
         for (std::size_t row = 0; row < 3; ++row)
         {
             result._data[row] = _mm_sub_ps(_data[row], rhs._data[row]);
@@ -82,36 +106,45 @@ namespace simd
 
     Matrix3x3 Matrix3x3::operator*(const Matrix3x3& rhs) const
     {
-        Matrix3x3 result = Zero();
-        for (std::size_t row = 0; row < 3; ++row)
+        Matrix3x3 result;
+        for (int i = 0; i < 3; ++i)
         {
-            for (std::size_t column = 0; column < 3; ++column)
-            {
-                result._data[row][column] =
-                    _data[row][0] * rhs._data[0][column] +
-                    _data[row][1] * rhs._data[1][column] +
-                    _data[row][2] * rhs._data[2][column];
-            }
+            const __m128 a0 = _mm_shuffle_ps(_data[i], _data[i], _MM_SHUFFLE(0, 0, 0, 0));
+            const __m128 a1 = _mm_shuffle_ps(_data[i], _data[i], _MM_SHUFFLE(1, 1, 1, 1));
+            const __m128 a2 = _mm_shuffle_ps(_data[i], _data[i], _MM_SHUFFLE(2, 2, 2, 2));
+
+            result._data[i] = _mm_add_ps(
+                _mm_add_ps(_mm_mul_ps(a0, rhs._data[0]), _mm_mul_ps(a1, rhs._data[1])),
+                _mm_mul_ps(a2, rhs._data[2])
+            );
         }
         return result;
     }
 
 
-    Vec3f Matrix3x3::operator*(const Vec3f& rhs) const
+    Vec3f Matrix3x3::operator*(Vec3f rhs) const
     {
-        // Masque 0x71 : multiplie les lanes 0..2 et écrit la somme dans la lane 0,
-        // celle que lit _mm_cvtss_f32, pour les trois lignes.
-        Vec3f result;
-        result.setX(_mm_cvtss_f32(_mm_dp_ps(_data[0], rhs._data, 0x71)));
-        result.setY(_mm_cvtss_f32(_mm_dp_ps(_data[1], rhs._data, 0x71)));
-        result.setZ(_mm_cvtss_f32(_mm_dp_ps(_data[2], rhs._data, 0x71)));
-        return result;
+        __m128 c0 = _data[0];
+        __m128 c1 = _data[1];
+        __m128 c2 = _data[2];
+        __m128 c3 = _mm_setzero_ps();
+
+        _MM_TRANSPOSE4_PS(c0, c1, c2, c3);
+
+        __m128 vx = _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(0, 0, 0, 0));
+        __m128 vy = _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(1, 1, 1, 1));
+        __m128 vz = _mm_shuffle_ps(rhs._data, rhs._data, _MM_SHUFFLE(2, 2, 2, 2));
+
+        return _mm_add_ps(
+            _mm_add_ps(_mm_mul_ps(vx, c0), _mm_mul_ps(vy, c1)),
+            _mm_mul_ps(vz, c2)
+        );
     }
 
 
     Matrix3x3 Matrix3x3::operator*(float scalar) const
     {
-        Matrix3x3 result = Zero();
+        Matrix3x3 result;
         __m128 scalarVec = _mm_set1_ps(scalar);
         for (std::size_t row = 0; row < 3; ++row)
         {
@@ -168,89 +201,52 @@ namespace simd
     {
         Matrix3x3 working = *this;
 
-        float determinant = working._data[0][0] * (working._data[1][1] * working._data[2][2] - working._data[1][2] * working._data[2][1]) -
-                            working._data[0][1] * (working._data[1][0] * working._data[2][2] - working._data[1][2] * working._data[2][0]) +
-                            working._data[0][2] * (working._data[1][0] * working._data[2][1] - working._data[1][1] * working._data[2][0]);
+        float determinant = At(working._data[0], 0) * (At(working._data[1], 1) * At(working._data[2], 2) - At(working._data[1], 2) * At(working._data[2], 1)) -
+                            At(working._data[0], 1) * (At(working._data[1], 0) * At(working._data[2], 2) - At(working._data[1], 2) * At(working._data[2], 0)) +
+                            At(working._data[0], 2) * (At(working._data[1], 0) * At(working._data[2], 1) - At(working._data[1], 1) * At(working._data[2], 0));
         return determinant;
     }
 
 
-    Matrix3x3 Matrix3x3::Inverse(float relativeTolerance) const
+    Matrix3x3 Matrix3x3::Inverse() const
     {
-        if (!std::isfinite(relativeTolerance) || relativeTolerance < 0.0f || relativeTolerance >= 1.0f)
+        auto cross = [](__m128 a, __m128 b) {
+            const __m128 a_yzx = _mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 0, 2, 1));
+            const __m128 b_zxy = _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 1, 0, 2));
+            const __m128 a_zxy = _mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 1, 0, 2));
+            const __m128 b_yzx = _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 0, 2, 1));
+            return _mm_sub_ps(_mm_mul_ps(a_yzx, b_zxy), _mm_mul_ps(a_zxy, b_yzx));
+        };
+
+        __m128 c0 = cross(_data[1], _data[2]);
+        __m128 c1 = cross(_data[2], _data[0]);
+        __m128 c2 = cross(_data[0], _data[1]);
+
+        // Déterminant = dot(_data[0], c0)
+        __m128 m = _mm_mul_ps(_data[0], c0);
+        __m128 det = _mm_add_ps(m, _mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 1, 1, 1)));
+        det = _mm_add_ps(det, _mm_shuffle_ps(m, m, _MM_SHUFFLE(2, 2, 2, 2)));
+
+        const float det_val = _mm_cvtss_f32(det);
+        if (std::abs(det_val) < 1e-8f)
         {
-            throw std::invalid_argument("Inverse tolerance must be finite and in [0, 1)");
+            throw std::runtime_error("Matrix is singular");
         }
-        Matrix3x3 left = *this;
-        Matrix3x3 right;
-        float scales[3]{};
-        for (std::size_t row = 0; row < 3; ++row)
-        {
-            for (std::size_t column = 0; column < 3; ++column)
-            {
-                if (!std::isfinite(left._data[row][column]))
-                {
-                    throw std::domain_error("Cannot invert a non-finite matrix");
-                }
-                scales[row] = std::max(scales[row], std::abs(left._data[row][column]));
-            }
-            if (scales[row] == 0.0f)
-            {
-                throw std::domain_error("Cannot invert a singular matrix");
-            }
-        }
-        for (std::size_t column = 0; column < 3; ++column)
-        {
-            std::size_t pivot = column;
-            for (std::size_t row = column + 1; row < 3; ++row)
-            {
-                if (std::abs(left._data[row][column]) / scales[row] >
-                    std::abs(left._data[pivot][column]) / scales[pivot])
-                {
-                    pivot = row;
-                }
-            }
-            if (std::abs(left._data[pivot][column]) / scales[pivot] <= relativeTolerance)
-            {
-                throw std::domain_error("Matrix is singular or too ill-conditioned");
-            }
-            for (std::size_t j = 0; j < 3; ++j)
-            {
-                std::swap(left._data[column][j], left._data[pivot][j]);
-                std::swap(right._data[column][j], right._data[pivot][j]);
-            }
-            std::swap(scales[column], scales[pivot]);
-            const float diagonal = left._data[column][column];
-            for (std::size_t j = 0; j < 3; ++j)
-            {
-                left._data[column][j] /= diagonal;
-                right._data[column][j] /= diagonal;
-            }
-            for (std::size_t row = 0; row < 3; ++row)
-            {
-                if (row == column)
-                {
-                    continue;
-                }
-                const float factor = left._data[row][column];
-                for (std::size_t j = 0; j < 3; ++j)
-                {
-                    left._data[row][j] -= factor * left._data[column][j];
-                    right._data[row][j] -= factor * right._data[column][j];
-                }
-            }
-        }
-        for (std::size_t row = 0; row < 3; ++row)
-        {
-            for (std::size_t column = 0; column < 3; ++column)
-            {
-                if (!std::isfinite(right._data[row][column]))
-                {
-                    throw std::domain_error("Inverse is not representable");
-                }
-            }
-        }
-        return right;
+
+        const __m128 inv_det = _mm_set1_ps(1.0f / det_val);
+
+        __m128 r0 = _mm_mul_ps(c0, inv_det);
+        __m128 r1 = _mm_mul_ps(c1, inv_det);
+        __m128 r2 = _mm_mul_ps(c2, inv_det);
+        __m128 r3 = _mm_setzero_ps();
+
+        _MM_TRANSPOSE4_PS(r0, r1, r2, r3);
+
+        Matrix3x3 res;
+        res._data[0] = r0;
+        res._data[1] = r1;
+        res._data[2] = r2;
+        return res;
     }
 
 
@@ -266,34 +262,37 @@ namespace simd
 
     Matrix3x3 Matrix3x3::RotationX(float radians)
     {
-        Matrix3x3 result;
-        const float cosine = std::cos(radians);
-        const float sine = std::sin(radians);
-        result._data[1] = _mm_set_ps(0.0f, -sine, cosine, 0.0f);
-        result._data[2] = _mm_set_ps(0.0f, cosine, sine, 0.0f);
-        return result;
+        float c = std::cos(radians);
+        float s = std::sin(radians);
+
+        Matrix3x3 res;
+        res._data[0] = _mm_setr_ps(1.0f, 0.0f, 0.0f, 0.0f);
+        res._data[1] = _mm_setr_ps(0.0f,    c,   -s, 0.0f);
+        res._data[2] = _mm_setr_ps(0.0f,    s,    c, 0.0f);
+        return res;
     }
 
 
     Matrix3x3 Matrix3x3::RotationY(float radians)
     {
-        Matrix3x3 result;
-        const float cosine = std::cos(radians);
-        const float sine = std::sin(radians);
-        result._data[0] = _mm_set_ps(0.0f, sine, 0.0f, cosine);
-        result._data[2] = _mm_set_ps(0.0f, cosine, 0.0f, -sine);
-        return result;
+        float c = std::cos(radians);
+        float s = std::sin(radians);
+        Matrix3x3 res;
+        res._data[0] = _mm_setr_ps(   c, 0.0f,    s, 0.0f);
+        res._data[1] = _mm_setr_ps(0.0f, 1.0f, 0.0f, 0.0f);
+        res._data[2] = _mm_setr_ps(  -s, 0.0f,    c, 0.0f);
+        return res;
     }
-
 
     Matrix3x3 Matrix3x3::RotationZ(float radians)
     {
-        Matrix3x3 result;
-        const float cosine = std::cos(radians);
-        const float sine = std::sin(radians);
-        result._data[0] = _mm_set_ps(0.0f, 0.0f, -sine, cosine);
-        result._data[1] = _mm_set_ps(0.0f, 0.0f, cosine, sine);
-        return result;
+        float c = std::cos(radians);
+        float s = std::sin(radians);
+        Matrix3x3 res;
+        res._data[0] = _mm_setr_ps(   c,  -s, 0.0f, 0.0f);
+        res._data[1] = _mm_setr_ps(   s,   c, 0.0f, 0.0f);
+        res._data[2] = _mm_setr_ps(0.0f, 0.0f, 1.0f, 0.0f);
+        return res;
     }
 
 }

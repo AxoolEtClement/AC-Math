@@ -17,7 +17,8 @@ namespace simd
         Vec3f();
         Vec3f(float x, float y, float z);
 
-        Vec3f(const Vec3f& other);
+        Vec3f(const Vec3f&) = default;
+        Vec3f& operator=(const Vec3f&) = default;
         Vec3f(__m128 data);
 
         float getX() const;

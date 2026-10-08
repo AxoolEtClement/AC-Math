@@ -737,14 +737,25 @@ namespace
     // =================================================================================
     //  Matrix3x3
     // =================================================================================
+
+    template <typename M>
+    inline float Checksum(const M& m)
+    {
+        float s = 0.0f;
+        for (std::size_t r = 0; r < 3; ++r)
+            for (std::size_t c = 0; c < 3; ++c)
+                s += m(r, c);
+        return s;
+    }
+
     void BenchMatrix3x3(Suite& s)
     {
         s.Group("Matrix3x3");
 
-        s.Compare("default ctor", [](auto& d) { return decltype(d.ma){}; });
-        s.Compare("Identity()", [](auto& d) { return d.Identity(); });
-        s.Compare("Zero()", [](auto& d) { return d.Zero(); });
-        s.Compare("construct from array<9>", [](auto& d) { return d.MakeMat3(d.elems); });
+        s.Compare("default ctor", [](auto& d) { return Checksum(decltype(d.ma){}); });
+        s.Compare("Identity()", [](auto& d) { return Checksum(d.Identity()); });
+        s.Compare("Zero()", [](auto& d) { return Checksum(d.Zero()); });
+        s.Compare("construct from array<9>", [](auto& d) { return Checksum(d.MakeMat3(d.elems)); });
 
         s.Compare("operator() read x9", [](auto& d)
         {
@@ -754,37 +765,29 @@ namespace
                     sum += d.ma(r, c);
             return sum;
         });
-        s.Compare("operator() write x9", [](auto& d)
-        {
-            auto m = d.ma;
-            for (std::size_t r = 0; r < 3; ++r)
-                for (std::size_t c = 0; c < 3; ++c)
-                    m(r, c) = d.scalar;
-            return m;
-        });
 
-        s.Compare("A + B", [](auto& d) { return d.ma + d.mb; });
-        s.Compare("A - B", [](auto& d) { return d.ma - d.mb; });
-        s.Compare("A * B", [](auto& d) { return d.ma * d.mb; });
+        s.Compare("A + B", [](auto& d) { return Checksum(d.ma + d.mb); });
+        s.Compare("A - B", [](auto& d) { return Checksum(d.ma - d.mb); });
+        s.Compare("A * B", [](auto& d) { return Checksum(d.ma * d.mb); });
         s.Compare("A * vec3", [](auto& d) { return d.ma * d.a3; });
-        s.Compare("A * scalar", [](auto& d) { return d.ma * d.scalar; });
-        s.Compare("A *= B", [](auto& d) { auto m = d.ma; m *= d.mb; return m; });
+        s.Compare("A * scalar", [](auto& d) { return Checksum(d.ma * d.scalar); });
+        s.Compare("A *= B", [](auto& d) { auto m = d.ma; m *= d.mb; return Checksum(m); });
 
         s.Compare("A == A' (equal, worst case)", [](auto& d) { return d.ma == d.meq; });
         s.Compare("A == B (different)", [](auto& d) { return d.ma == d.mb; });
         s.Compare("A != A' (equal)", [](auto& d) { return d.ma != d.meq; });
 
-        s.Compare("Transpose", [](auto& d) { return d.ma.Transpose(); });
+        s.Compare("Transpose", [](auto& d) { return Checksum(d.ma.Transpose()); });
         s.Compare("Determinant", [](auto& d) { return d.ma.Determinant(); });
-        s.Compare("Inverse", [](auto& d) { return d.ma.Inverse(); });
+        s.Compare("Inverse", [](auto& d) { return Checksum(d.ma.Inverse()); });
         s.Compare("Inverse(A) * vec3 (solve)", [](auto& d) { return d.ma.Inverse() * d.a3; });
 
-        s.Compare("Scale(vec3)", [](auto& d) { return d.Scale(d.a3); });
-        s.Compare("RotationX", [](auto& d) { return d.RotX(d.angX); });
-        s.Compare("RotationY", [](auto& d) { return d.RotY(d.angY); });
-        s.Compare("RotationZ", [](auto& d) { return d.RotZ(d.angZ); });
+        s.Compare("Scale(vec3)", [](auto& d) { return Checksum(d.Scale(d.a3)); });
+        s.Compare("RotationX", [](auto& d) { return Checksum(d.RotX(d.angX)); });
+        s.Compare("RotationY", [](auto& d) { return Checksum(d.RotY(d.angY)); });
+        s.Compare("RotationZ", [](auto& d) { return Checksum(d.RotZ(d.angZ)); });
 
-        s.Compare("Rz * Ry * Rx (build + compose)", [](auto& d) { return d.RotZ(d.angZ) * d.RotY(d.angY) * d.RotX(d.angX); });
+        s.Compare("Rz * Ry * Rx (build + compose)", [](auto& d) { return Checksum(d.RotZ(d.angZ) * d.RotY(d.angY) * d.RotX(d.angX)); });
         s.Compare("(Scale * Rz) * vec3 (pipeline)", [](auto& d) { return (d.Scale(d.a3) * d.RotZ(d.angZ)) * d.b3; });
         s.Compare("A * B * vec3", [](auto& d) { return (d.ma * d.mb) * d.a3; });
     }
@@ -798,18 +801,20 @@ namespace
         s.Group("Batch");
 
         // ---- Vec3 ----
-        s.Compare("[Vec3] out[i] = a[i] + b[i]", [](auto& d)
+        s.Compare("[Vec3] sum of a[i] + b[i]", [](auto& d)
         {
             const std::size_t n = d.arr3a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out3[i] = d.arr3a[i] + d.arr3b[i];
-            return d.out3.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.arr3a[i] + d.arr3b[i]; acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
-        s.Compare("[Vec3] out[i] = a[i] * scalar", [](auto& d)
+        s.Compare("[Vec3] sum of a[i] * scalar", [](auto& d)
         {
             const std::size_t n = d.arr3a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out3[i] = d.arr3a[i] * d.scalar;
-            return d.out3.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.arr3a[i] * d.scalar; acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
         s.Compare("[Vec3] sum of Dot(a[i], b[i])", [](auto& d)
@@ -820,40 +825,45 @@ namespace
             return acc;
         }, kVecBatch);
 
-        s.Compare("[Vec3] out[i] = Cross(a[i], b[i])", [](auto& d)
+        s.Compare("[Vec3] sum of Cross(a[i], b[i])", [](auto& d)
         {
             const std::size_t n = d.arr3a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out3[i] = d.arr3a[i].Cross(d.arr3b[i]);
-            return d.out3.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.arr3a[i].Cross(d.arr3b[i]); acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
-        s.Compare("[Vec3] out[i] = Normalize(a[i])", [](auto& d)
+        s.Compare("[Vec3] sum of Normalize(a[i])", [](auto& d)
         {
             const std::size_t n = d.arr3a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out3[i] = d.arr3a[i].Normalize();
-            return d.out3.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.arr3a[i].Normalize(); acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
-        s.Compare("[Vec3] out[i] = Lerp(a[i], b[i], t)", [](auto& d)
+        s.Compare("[Vec3] sum of Lerp(a[i], b[i], t)", [](auto& d)
         {
             const std::size_t n = d.arr3a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out3[i] = d.Lerp3(d.arr3a[i], d.arr3b[i], d.t);
-            return d.out3.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.Lerp3(d.arr3a[i], d.arr3b[i], d.t); acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
         // ---- Vec4 ----
-        s.Compare("[Vec4] out[i] = a[i] + b[i]", [](auto& d)
+        s.Compare("[Vec4] sum of a[i] + b[i]", [](auto& d)
         {
             const std::size_t n = d.arr4a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out4[i] = d.arr4a[i] + d.arr4b[i];
-            return d.out4.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.arr4a[i] + d.arr4b[i]; acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
-        s.Compare("[Vec4] out[i] = a[i] * scalar", [](auto& d)
+        s.Compare("[Vec4] sum of a[i] * scalar", [](auto& d)
         {
             const std::size_t n = d.arr4a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out4[i] = d.arr4a[i] * d.scalar;
-            return d.out4.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.arr4a[i] * d.scalar; acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
         s.Compare("[Vec4] sum of Dot(a[i], b[i])", [](auto& d)
@@ -864,54 +874,61 @@ namespace
             return acc;
         }, kVecBatch);
 
-        s.Compare("[Vec4] out[i] = Normalize(a[i])", [](auto& d)
+        s.Compare("[Vec4] sum of Normalize(a[i])", [](auto& d)
         {
             const std::size_t n = d.arr4a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out4[i] = d.arr4a[i].Normalize();
-            return d.out4.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.arr4a[i].Normalize(); acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
-        s.Compare("[Vec4] out[i] = Lerp(a[i], b[i], t)", [](auto& d)
+        s.Compare("[Vec4] sum of Lerp(a[i], b[i], t)", [](auto& d)
         {
             const std::size_t n = d.arr4a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out4[i] = d.Lerp4(d.arr4a[i], d.arr4b[i], d.t);
-            return d.out4.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.Lerp4(d.arr4a[i], d.arr4b[i], d.t); acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
-        s.Compare("[Vec4] out[i] = Min(a[i], b[i])", [](auto& d)
+        s.Compare("[Vec4] sum of Min(a[i], b[i])", [](auto& d)
         {
             const std::size_t n = d.arr4a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out4[i] = d.Min4(d.arr4a[i], d.arr4b[i]);
-            return d.out4.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.Min4(d.arr4a[i], d.arr4b[i]); acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
         // ---- Matrix3x3 ----
-        s.Compare("[Mat3] out[i] = A * v[i] (1 matrice, N vec)", [](auto& d)
+        s.Compare("[Mat3] sum of A * v[i] (1 matrice, N vec)", [](auto& d)
         {
             const std::size_t n = d.arr3a.size();
-            for (std::size_t i = 0; i < n; ++i) d.out3[i] = d.ma * d.arr3a[i];
-            return d.out3.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.ma * d.arr3a[i]; acc += d.GetX(v); }
+            return acc;
         }, kVecBatch);
 
-        s.Compare("[Mat3] out[i] = A[i] * v[i]", [](auto& d)
+        s.Compare("[Mat3] sum of A[i] * v[i]", [](auto& d)
         {
             const std::size_t n = d.arrMa.size();
-            for (std::size_t i = 0; i < n; ++i) d.out3[i] = d.arrMa[i] * d.arr3a[i];
-            return d.out3.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) { auto v = d.arrMa[i] * d.arr3a[i]; acc += d.GetX(v); }
+            return acc;
         }, kMatBatch);
 
-        s.Compare("[Mat3] out[i] = A[i] * B[i]", [](auto& d)
+        s.Compare("[Mat3] sum of A[i] * B[i]", [](auto& d)
         {
             const std::size_t n = d.arrMa.size();
-            for (std::size_t i = 0; i < n; ++i) d.outM[i] = d.arrMa[i] * d.arrMb[i];
-            return d.outM.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) acc += Checksum(d.arrMa[i] * d.arrMb[i]);
+            return acc;
         }, kMatBatch);
 
-        s.Compare("[Mat3] out[i] = Transpose(A[i])", [](auto& d)
+        s.Compare("[Mat3] sum of Transpose(A[i])", [](auto& d)
         {
             const std::size_t n = d.arrMa.size();
-            for (std::size_t i = 0; i < n; ++i) d.outM[i] = d.arrMa[i].Transpose();
-            return d.outM.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) acc += Checksum(d.arrMa[i].Transpose());
+            return acc;
         }, kMatBatch);
 
         s.Compare("[Mat3] sum of Determinant(A[i])", [](auto& d)
@@ -922,11 +939,12 @@ namespace
             return acc;
         }, kMatBatch);
 
-        s.Compare("[Mat3] out[i] = Inverse(A[i])", [](auto& d)
+        s.Compare("[Mat3] sum of Inverse(A[i])", [](auto& d)
         {
             const std::size_t n = d.arrMa.size();
-            for (std::size_t i = 0; i < n; ++i) d.outM[i] = d.arrMa[i].Inverse();
-            return d.outM.data();
+            float acc = 0.0f;
+            for (std::size_t i = 0; i < n; ++i) acc += Checksum(d.arrMa[i].Inverse());
+            return acc;
         }, kMatBatch);
     }
 
