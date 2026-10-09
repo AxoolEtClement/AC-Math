@@ -1,5 +1,7 @@
 #include "Vec4.hpp"
 
+extern "C" float Dot_Asm_x64(const void* lhs, const void* rhs);
+
 namespace
 {
     inline __m128 DotVec4(__m128 a, __m128 b)
@@ -169,32 +171,7 @@ namespace simd
 
     float Vec4::Dot(const Vec4& rhs) const
     {
-#if defined(_MSC_VER) && !defined(_M_X64)
-        // MSVC 32-bit (x86) : injection ASM directe sur place
-        float result;
-        __asm {
-            // "this" est dans ecx (convention __thiscall), other est sur la pile/registre
-            mov eax, rhs
-            movaps xmm0, [ecx]
-            movaps xmm1, [eax]
-
-            mulps xmm0, xmm1
-
-            movhlps xmm1, xmm0
-            addps xmm0, xmm1
-            movaps xmm1, xmm0
-            shufps xmm1, xmm1, 1
-            addss xmm0, xmm1
-
-            movss result, xmm0
-        }
-        return result;
-
-#else
-        // Fallback C++ / Linux ou MSVC 64-bit
-         return _mm_cvtss_f32(DotVec4(this->_data, rhs._data));
-#endif
-       
+        return _mm_cvtss_f32(DotVec4(this->_data, rhs._data));
     }
 
 

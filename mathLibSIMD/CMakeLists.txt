@@ -1,9 +1,18 @@
 cmake_minimum_required(VERSION 3.25)
-project(mathLibSIMD)
+project(mathLibSIMD LANGUAGES CXX ASM_MASM)
+
+set(ASM_NAME "${CMAKE_CURRENT_SOURCE_DIR}/src/dotProd.asm")
+
+# Ensure CMake treats .asm files as assembly source files for MASM
+set_source_files_properties(
+    ${ASM_NAME}
+    PROPERTIES LANGUAGE ASM_MASM
+)
 
 file(GLOB_RECURSE SOURCES
-    CONFIGURE_DEPENDS
+    CONFNIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    ${ASM_NAME}
 )
 
 file(GLOB_RECURSE HEADERS
@@ -12,8 +21,8 @@ file(GLOB_RECURSE HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
 
-add_library(mathLibSIMD ${SOURCES})
+add_library(mathLibSIMD ${SOURCES} ${HEADERS})
 
 target_include_directories(mathLibSIMD PUBLIC
-    include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )

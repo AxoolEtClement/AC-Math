@@ -6,9 +6,9 @@
 #include <stdexcept>
 #include <immintrin.h>
 
-class Matrix3x3; // Forward declaration to avoid circular dependency with Vec3f.
 namespace simd
 {
+    class Matrix3x3; // Forward declaration to avoid circular dependency with Vec3f.
     class alignas(16) Vec3f
     {
     public:

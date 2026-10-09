@@ -35,8 +35,9 @@ add_subdirectory(mathLibSIMD)
 add_subdirectory(tests)
 add_subdirectory(benchmark)
 
-
+if(NOT MSVC)
 target_compile_options(mathLibSIMD PUBLIC -msse4.1)
+endif()
 
 # Avertissements stricts
 if(MSVC)
