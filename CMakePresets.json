@@ -6,11 +6,11 @@
 	"configurePresets": [
 		{
 			"name": "default",
-			"displayName": "Default Ninja Build (x86)",
+			"displayName": "Default Ninja Build (x64)",
 			"generator": "Ninja",
 			"binaryDir": "${sourceDir}/build",
 			"architecture": {
-				"value": "x86",
+				"value": "x64",
 				"strategy": "external"
 			},
 			"cacheVariables": {
