@@ -137,7 +137,30 @@ namespace simd {
 
     float Vec3f::Dot(const Vec3f& rhs) const
     {
+#if defined(_MSC_VER) && !defined(_M_X64)
+        // MSVC 32-bit (x86) : injection ASM directe sur place
+        float result;
+        __asm {
+            mov eax, rhs
+            movaps xmm0, [ecx]
+            movaps xmm1, [eax]
+
+            mulps xmm0, xmm1
+
+            movhlps xmm1, xmm0
+            addps xmm0, xmm1
+            movaps xmm1, xmm0
+            shufps xmm1, xmm1, 1
+            addss xmm0, xmm1
+
+            movss result, xmm0
+        }
+        return result;
+
+#else
+        // Fallback C++ / Linux ou MSVC 64-bit
         return _mm_cvtss_f32(DotVec3(_data, rhs._data));
+#endif
     }
 
     Vec3f Vec3f::Cross(const Vec3f& rhs) const
