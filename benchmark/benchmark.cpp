@@ -130,10 +130,6 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    selectedOperation = "dot";
-	selectedVersion = "simd";
-	selectedSize = "large";
-
     SystemInfo sys;
     std::cout << "================================================================\n";
     std::cout << " MATH LIBRARY BENCHMARK (nanobench)\n";

@@ -5,7 +5,7 @@ SIMD explicites SSE/SSE2 pour le projet ASM/SIMD.
 
 ## Fonctionnalités
 
-- `Vec3f`, `Vec4` et `Matrix4x4` indépendants du rendu et du gameplay ;
+- `Vec3f`, `Vec4`, `Matrix4x4` et `Matrix3x3` indépendants du rendu et du gameplay ;
 - stockage SIMD `__m128`, alignement 16 octets ;
 - trois traitements batch :
   - `BatchDot` ;
@@ -19,7 +19,7 @@ SIMD explicites SSE/SSE2 pour le projet ASM/SIMD.
 
 ## Conventions mémoire
 
-`Matrix4x4` est stockée en row-major et utilise des vecteurs colonnes :
+`Matrix4x4` et `Matrix3x3` sont stockées en row-major et utilisent des vecteurs colonnes :
 
 ```text
 résultat = matrice × vecteur

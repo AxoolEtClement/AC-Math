@@ -45,11 +45,3 @@ if(MSVC)
 else()
     target_compile_options(mathLibCPP INTERFACE -Wall -Wextra -Wpedantic)
 endif()
-
-
-
-# 4. Création du programme exécutable rattaché aux fichiers .cpp
-add_executable(app ${SOURCES})
-
-# 5. Liaison de l'exécutable avec la bibliothèque de maths
-target_link_libraries(app PRIVATE mathLibCPP)
