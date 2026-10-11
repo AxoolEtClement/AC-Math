@@ -208,8 +208,14 @@ namespace simd
     }
 
 
-    Matrix3x3 Matrix3x3::Inverse() const
+    Matrix3x3 Matrix3x3::Inverse(float relativeTolerance) const
     {
+        if (!std::isfinite(relativeTolerance) ||
+            relativeTolerance <= 0.0f || relativeTolerance >= 1.0f)
+        {
+            throw std::invalid_argument("Invalid inverse tolerance");
+        }
+
         auto cross = [](__m128 a, __m128 b) {
             const __m128 a_yzx = _mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 0, 2, 1));
             const __m128 b_zxy = _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 1, 0, 2));
@@ -222,15 +228,31 @@ namespace simd
         __m128 c1 = cross(_data[2], _data[0]);
         __m128 c2 = cross(_data[0], _data[1]);
 
-        // Déterminant = dot(_data[0], c0)
         __m128 m = _mm_mul_ps(_data[0], c0);
         __m128 det = _mm_add_ps(m, _mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 1, 1, 1)));
         det = _mm_add_ps(det, _mm_shuffle_ps(m, m, _MM_SHUFFLE(2, 2, 2, 2)));
 
         const float det_val = _mm_cvtss_f32(det);
-        if (std::abs(det_val) < 1e-8f)
+
+        if (!std::isfinite(det_val))
         {
-            throw std::runtime_error("Matrix is singular");
+            throw std::domain_error("Determinant is non-finite");
+        }
+
+        const float rowScale0 = std::max({
+            std::abs(At(_data[0], 0)), std::abs(At(_data[0], 1)),
+            std::abs(At(_data[0], 2))});
+        const float rowScale1 = std::max({
+            std::abs(At(_data[1], 0)), std::abs(At(_data[1], 1)),
+            std::abs(At(_data[1], 2))});
+        const float rowScale2 = std::max({
+            std::abs(At(_data[2], 0)), std::abs(At(_data[2], 1)),
+            std::abs(At(_data[2], 2))});
+        const float scaleProduct = rowScale0 * rowScale1 * rowScale2;
+
+        if (std::abs(det_val) <= relativeTolerance * scaleProduct)
+        {
+            throw std::domain_error("Matrix is singular or too ill-conditioned");
         }
 
         const __m128 inv_det = _mm_set1_ps(1.0f / det_val);

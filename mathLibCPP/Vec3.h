@@ -242,8 +242,18 @@ namespace Maths
     template <std::floating_point T>
     T Vec3<T>::Angle(const Vec3& rhs) const
     {
-        const T cosine = Normalize().Dot(rhs.Normalize());
-        return std::acos(std::clamp(cosine, T{-1}, T{1}));
+        const T mag_sq = MagnitudeSquared();
+        const T rhs_mag_sq = rhs.MagnitudeSquared();
+
+        if (mag_sq < T{1e-12} || rhs_mag_sq < T{1e-12})
+        {
+            throw std::domain_error("Cannot compute angle with a zero vector.");
+        }
+
+        const T dot = Dot(rhs);
+        const T mag = std::sqrt(mag_sq * rhs_mag_sq);
+        const T cos_theta = std::clamp(dot / mag, T{-1}, T{1});
+        return std::acos(cos_theta);
     }
 
     template <std::floating_point T>

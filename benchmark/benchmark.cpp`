@@ -1,0 +1,188 @@
+// =====================================================================================
+//  BenchmarkMath.cpp : mathLibCPP (scalaire) vs mathLibSIMD (SSE2)
+// =====================================================================================
+
+#include <nanobench.h>
+
+#include "mathLibCPP/Vec3.h"
+#include "mathLibCPP/Vec4.h"
+#include "mathLibCPP/Matrix3x3.h"
+#include "mathLibSIMD/include/Vec3f.hpp"
+#include "mathLibSIMD/include/Vec4.hpp"
+#include "mathLibSIMD/include/Mat3.hpp"
+#include "mathLibSIMD/include/Mat4x4.hpp"
+#include "mathLibSIMD/include/Vec4SOA.hpp"
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <random>
+#include <string>
+#include <vector>
+#include <numeric>
+#include <cctype>
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+#endif
+
+namespace
+{
+    // Tailles recommandées : petite (L1), moyenne (L2), grande (> L2)
+    // 16 Ko est souvent la limite L1. L2 est souvent 256Ko-1Mo.
+    // On utilise des tailles de vecteurs pour définir la charge.
+    enum class BenchSize { Small, Medium, Large };
+
+    std::size_t SizeToCount(BenchSize s) {
+        switch(s) {
+            case BenchSize::Small:  return 128;           // ~2 Ko
+            case BenchSize::Medium: return 4096;           // ~64 Ko
+            case BenchSize::Large:  return 131072;        // ~2 Mo (dépasse L2)
+            default: return 128;
+        }
+    }
+
+    inline void CompilerBarrier() {
+#if defined(__GNUC__) || defined(__clang__)
+        __asm__ __volatile__("" ::: "memory");
+#elif defined(_MSC_VER)
+        _ReadWriteBarrier();
+#endif
+    }
+
+    std::string ToLower(std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return s;
+    }
+
+    struct Options {
+        std::string treatment; // "dot", "normalize", "transform"
+        std::string version;   // "ref", "simd"
+        std::string layout;    // "aos", "soa"
+        std::vector<std::size_t> sizes;
+        std::uint32_t repetitions = 10;
+        std::uint32_t seed = std::random_device{}();
+        std::string csvPath = "benchmark_results.csv";
+    };
+
+    Options ParseArgs(int argc, char** argv) {
+        Options opt;
+        opt.sizes = { SizeToCount(BenchSize::Small), SizeToCount(BenchSize::Medium), SizeToCount(BenchSize::Large) };
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--treatment" && i + 1 < argc) opt.treatment = argv[++i];
+            else if (arg == "--version" && i + 1 < argc) opt.version = argv[++i];
+            else if (arg == "--layout" && i + 1 < argc) opt.layout = argv[++i];
+            else if (arg == "--repetitions" && i + 1 < argc) opt.repetitions = std::stoul(argv[++i]);
+            else if (arg == "--seed" && i + 1 < argc) opt.seed = std::stoul(argv[++i]);
+            else if (arg == "--csv" && i + 1 < argc) opt.csvPath = argv[++i];
+        }
+        return opt;
+    }
+
+    struct Inputs {
+        std::vector<simd::Vec3f> vec3s;
+        std::vector<simd::Vec4> vec4s;
+        simd::Matrix4x4 mat4;
+
+        explicit Inputs(std::uint32_t seed, std::size_t count) {
+            std::mt19937 rng(seed);
+            std::uniform_real_distribution<float> dist(0.5f, 10.0f);
+            for(std::size_t i=0; i<count; ++i) {
+                vec3s.emplace_back(dist(rng), dist(rng), dist(rng));
+                vec4s.emplace_back(dist(rng), dist(rng), dist(rng), dist(rng));
+            }
+            mat4 = simd::Matrix4x4::Translation(simd::Vec3f{10, 20, 30});
+        }
+    };
+
+    // Stats helpers
+    struct Stats {
+        double median;
+        double iqr;
+        double min;
+        double max;
+        std::vector<double> raw;
+
+        static Stats Compute(std::vector<double>& values) {
+            std::sort(values.begin(), values.end());
+            std::size_t n = values.size();
+            double med = values[n/2];
+            double q1 = values[n/4];
+            double q3 = values[3*n/4];
+            return { med, q3 - q1, values[0], values[n-1], values };
+        }
+    };
+
+    // CPU Info (simplified for Windows/MSVC)
+    void PrintSystemInfo() {
+        std::cout << "CPU: x86_64 (SIMD SSE2)\n";
+        std::cout << "Compiler: MSVC\n";
+        std::cout << "Options: /O2 /arch:SSE2 /fp:precise\n";
+    }
+
+    // Benchmark Core
+    void RunBenchmark(const Options& opt) {
+        PrintSystemInfo();
+        std::cout << "Seed: " << opt.seed << "\n";
+        std::cout << "Treatment: " << opt.treatment << " | Version: " << opt.version << " | Layout: " << opt.layout << "\n\n";
+
+        std::ofstream csv(opt.csvPath);
+        csv << "size,repetition,time_ns\n";
+
+        for (auto size : opt.sizes) {
+            Inputs in(opt.seed, size);
+            std::vector<double> timings;
+
+            for (std::uint32_t r = 0; r < opt.repetitions; ++r) {
+                // Pre-prepare to avoid allocation in loop
+                std::vector<float> dot_res(size);
+                std::vector<simd::Vec3f> norm_res(size);
+                std::vector<simd::Vec3f> trans_res(size);
+
+                auto start = std::chrono::high_resolution_clock::now();
+
+                if (opt.treatment == "dot") {
+                    if (opt.version == "simd") simd::BatchDot(in.vec3s.data(), in.vec3s.data(), dot_res.data(), size);
+                    else {
+                        for(std::size_t i=0; i<size; ++i) dot_res[i] = in.vec3s[i].getX()*in.vec3s[i].getX() + in.vec3s[i].getY()*in.vec3s[i].getY() + in.vec3s[i].getZ()*in.vec3s[i].getZ();
+                    }
+                } else if (opt.treatment == "normalize") {
+                    if (opt.version == "simd") simd::BatchNormalize(in.vec3s.data(), norm_res.data(), size);
+                    else {
+                        for(std::size_t i=0; i<size; ++i) {
+                            float m = std::sqrt(in.vec3s[i].getX()*in.vec3s[i].getX() + in.vec3s[i].getY()*in.vec3s[i].getY() + in.vec3s[i].getZ()*in.vec3s[i].getZ());
+                            norm_res[i] = simd::Vec3f(in.vec3s[i].getX()/m, in.vec3s[i].getY()/m, in.vec3s[i].getZ()/m);
+                        }
+                    }
+                } else if (opt.treatment == "transform") {
+                    if (opt.version == "simd") simd::BatchTransformPoint(in.mat4, in.vec3s.data(), trans_res.data(), size);
+                    else {
+                        for(std::size_t i=0; i<size; ++i) trans_res[i] = in.mat4.TransformPoint(in.vec3s[i]);
+                    }
+                }
+
+                auto end = std::chrono::high_resolution_clock::now();
+                double ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+                timings.push_back(ns);
+                csv << size << "," << r << "," << ns << "\n";
+            }
+
+            Stats s = Stats::Compute(timings);
+            std::cout << "Size " << std::setw(6) << size << " | Median: " << std::setw(10) << s.median << " ns | IQR: " << std::setw(10) << s.iqr << " ns\n";
+        }
+    }
+}
+
+int main(int argc, char** argv) {
+    Options opt = ParseArgs(argc, argv);
+    RunBenchmark(opt);
+    return 0;
+}

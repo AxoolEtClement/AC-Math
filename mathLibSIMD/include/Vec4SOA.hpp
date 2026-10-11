@@ -1,3 +1,8 @@
+/**
+ * @file Vec4SOA.hpp
+ * @brief Implémentation de vecteurs 4D en format Structure of Arrays (SoA).
+ */
+
 #pragma once
 
 #include <algorithm>
@@ -8,6 +13,19 @@
 
 namespace simd
 {
+    class Vec4;
+    /**
+     * @class Vec4SOA
+     * @brief Structure de tableaux (SoA) pour le traitement parallèle de 4 vecteurs 4D.
+     *
+     * Au lieu de stocker [x y z w] pour un vecteur, on stocke :
+     * - _dataX : [x0 x1 x2 x3]
+     * - _dataY : [y0 y1 y2 y3]
+     * - _dataZ : [z0 z1 z2 z3]
+     * - _dataW : [w0 w1 w2 w3]
+     *
+     * Cela permet d'exploiter pleinement les instructions SIMD sans permutations.
+     */
     class alignas(16) Vec4SOA
     {
     public:
