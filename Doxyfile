@@ -1,0 +1,14 @@
+PROJECT_NAME = "ASM / SIMD - Bibliothèque mathématique"
+OUTPUT_LANGUAGE = French
+INPUT = mathLibCPP mathLibSIMD tests benchmark src
+RECURSIVE = YES
+FILE_PATTERNS = *.hpp *.h *.cpp *.inl *.md *.asm
+EXTRACT_ALL = NO
+WARN_IF_UNDOCUMENTED = YES
+WARN_IF_DOC_ERROR = YES
+WARN_NO_PARAMDOC = YES
+GENERATE_HTML = YES
+GENERATE_LATEX = NO
+USE_MATHJAX = YES
+OUTPUT_DIRECTORY = docs/doxygen
+EXCLUDE = x64 Debug Release .vs packages docs/doxygen

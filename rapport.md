@@ -1,256 +1,323 @@
-# Rapport : bibliothèque mathématique C++ vs SIMD
+# Rapport technique — AC-Math
 
-## Table des matières
+## 1. Objet et périmètre
 
-- [Introduction et contexte](#introduction-et-contexte)
-- [Méthodologie de test](#méthodologie-de-test)
-- [Mesures et tests](#mesures-et-tests)
-- [Conclusion](#conclusion)
+Ce projet compare une bibliothèque mathématique C++ de référence à une
+implémentation SIMD explicite SSE/SSE2. Le périmètre du cahier des charges
+porte sur trois traitements par lots de `Vec3f` :
 
----
+1. produit scalaire de deux tableaux ;
+2. normalisation d'un tableau de vecteurs ;
+3. transformation de points 3D par une matrice affine `Matrix4x4`.
 
-## Introduction et contexte
+Les extensions AVX, AoSoA, GPU et multithreading ne font pas partie de cette
+campagne.
 
-Dans le cadre de notre troisième année en moteur, nous avons pour projet fil rouge de réaliser un moteur physique.
+## 2. Conventions et implémentation
 
-Notre premier objectif est de réaliser une bibliothèque mathématique la plus optimisée possible, afin de poser de bonnes fondations pour ce moteur. Nous sommes partis d'une bibliothèque existante en C++ et nous l'avons convertie en SIMD afin de comparer les performances.
+`Vec3f` et `Vec4` stockent leurs composantes dans un registre `__m128` et
+sont alignés sur 16 octets. `Matrix4x4` utilise un stockage row-major et des
+vecteurs colonnes :
 
-Ce rapport présente nos mesures de performances ainsi que d'autres axes d'amélioration.
+```text
+résultat = matrice × vecteur
+```
 
----
+Dans une composition `A * B`, la matrice `B` est appliquée avant `A`.
+`TransformPoint` utilise `w = 1` et ne réalise pas de division perspective.
 
-## Méthodologie de test
+Les kernels SIMD chargent quatre vecteurs sous forme de lanes :
 
-### Objectif
+```text
+x = [x0, x1, x2, x3]
+y = [y0, y1, y2, y3]
+z = [z0, z1, z2, z3]
+```
 
-Comparer `mathLibCPP` (version scalaire, référence) et `mathLibSIMD` (SSE4.1) sur `Vec3`, `Vec4` et `Matrix3x3`.
+Les tailles non multiples de quatre sont terminées par une boucle scalaire
+bornée. Un lot vide ou un pointeur nul est ignoré. Pour la normalisation,
+un vecteur de longueur inférieure au seuil `1e-12` produit `Vec3f::Zero`.
 
-### Outils
+La conversion AoS/SoA de `Vec4` est disponible avec `ToSOA` et `ToAOS`. Son
+coût est mesuré séparément du coût des kernels.
 
-| Rôle | Outil |
+## 3. Protocole de mesure
+
+| Paramètre | Valeur |
 |:--|:--|
-| Validation de la correction | Google Test |
-| Micro-benchmarks | nanobench |
-| Langage | C++20 |
-| Compilateur et options | -msse4.1 -lto |
-| Processeur | ryzen5 4800 |
-| Système d'exploitation | nobaraLinux |
+| Système | Windows x64 |
+| Compilateur | MSVC |
+| Options affichées | `/O2 /arch:SSE2 /fp:precise` |
+| Jeu d'instructions | SSE2 pour les kernels batch |
+| Bibliothèque de mesure | nanobench |
+| Graine aléatoire | `42` |
+| Échauffement | 1000 itérations |
+| Répétitions | 25 epochs |
+| Tailles | 128, 4096 et 131072 éléments |
 
-### Validation de la correction
+Les données et les buffers sont préparés avant chaque mesure. Les résultats
+sont consommés par la lambda de benchmark afin d'empêcher la suppression du
+calcul. Les conversions AoS/SoA, l'allocation initiale et l'affichage des
+résultats ne sont pas inclus dans les kernels batch.
 
-- Les tests unitaires de la version scalaire ont été portés sur la version SIMD, avec les mêmes valeurs attendues et une tolérance relative de 1e-5.
-- Ils couvrent aussi les cas limites : division par zéro, valeurs non finies, matrice singulière, indices hors bornes, ainsi que l'alignement sur 16 octets.
-- Ils ont révélé 6 bugs dans `Mat3.cpp`, corrigés avant toute mesure.
+La valeur `ns/op` est le temps médian rapporté par nanobench. Le speedup est :
 
-### Protocole de mesure
+```text
+speedup = temps référence / temps SIMD
+```
 
-- Chaque benchmark est une lambda générique exécutée **telle quelle** sur les deux implémentations : même code, mêmes données.
-- Les entrées sont aléatoires à l'exécution (graine fixable), pour éviter un calcul à la compilation. Une barrière mémoire et `doNotOptimizeAway` empêchent le compilateur de supprimer le calcul ou de le sortir de la boucle.
-- Chaque mesure comprend 1000 itérations d'échauffement, puis 25 époques de 10 ms. La valeur retenue est la **médiane**.
-- Environ 100 comparaisons sont réalisées, réparties en deux familles :
-  - **Tests unitaires** : une opération sur des données en cache (coût intrinsèque de l'opération).
-  - **Tests par lots (Batch)** : la même opération sur 1024 vecteurs (256 matrices), avec un temps ramené **par élément** (cache, boucle, taille des objets).
+Un speedup supérieur à `1` est favorable au SIMD. Les lignes marquées
+`Unstable` par nanobench doivent être interprétées avec prudence : la durée
+totale de mesure est courte par rapport au nombre d'itérations.
 
-### Métriques
+## 4. Résultats du benchmark
 
-- **ns/op** : temps par opération (par élément pour les lots).
-- **Speedup** = temps scalaire / temps SIMD (supérieur à 1 : le SIMD est plus rapide).
-- Un écart est jugé significatif au-delà de ±10 %, ce qui est nettement au-dessus du bruit de mesure (`err%` ≤ 2 %).
-- Les résultats sont synthétisés par la moyenne géométrique des speedups de chaque groupe.
+Mesures obtenues avec :
 
-### Limites
+```powershell
+build\benchmark\benchmark.exe all all
+```
 
-- Plancher de mesure d'environ 0,5 ns par itération.
-- Certaines fonctions n'utilisent pas le même algorithme (norme : `std::hypot` contre racine du produit scalaire ; déterminant : pivot de Gauss contre cofacteurs). Ces écarts ne reflètent pas uniquement l'effet du SIMD.
-- Les rotations sont dominées par le coût de `sin` et `cos`.
-- Un seul processeur et un seul compilateur : les résultats ne sont pas généralisables.
+### 4.1 Vue synthétique
 
----
-
-## Mesures et tests
-
-### Comment lire les tableaux
-
-| Colonne | Signification |
-|:--|:--|
-| C++ (ns/op) | Temps de la version scalaire |
-| SIMD (ns/op) | Temps de la version SIMD |
-| Speedup | Temps C++ / temps SIMD |
-| Verdict | ✅ plus rapide (≥ 1,10×) · ❌ plus lent (≤ 0,90×) · ➖ équivalent (entre les deux) |
-
-### Vec3
-
-| Opération | C++ (ns/op) | SIMD (ns/op) | Speedup | Verdict |
+| Traitement | 128 éléments | 4096 éléments | 131072 éléments | Conclusion |
 |:--|--:|--:|--:|:--|
-| `construct (x,y,z)` | 0,67 | 0,80 | 0,84× | ➖ équivalent |
-| `read x+y+z` | 0,74 | 0,74 | 1,01× | ➖ équivalent |
-| `write x,y,z` | 0,67 | 1,01 | 0,67× | ❌ plus lent |
-| `a + b` | 1,11 | 0,63 | 1,76× | ✅ plus rapide |
-| `a - b` | 1,11 | 0,63 | 1,76× | ✅ plus rapide |
-| `a * b` (composantes) | 1,11 | 0,63 | 1,76× | ✅ plus rapide |
-| `a / b` (composantes) | 1,76 | 1,46 | 1,21× | ✅ plus rapide |
-| `-a` | 0,84 | 0,50 | 1,67× | ✅ plus rapide |
-| `a * scalaire` | 0,88 | 0,61 | 1,44× | ✅ plus rapide |
-| `scalaire * a` | 0,88 | 0,61 | 1,44× | ✅ plus rapide |
-| `a / scalaire` | 1,76 | 0,88 | 2,00× | ✅ plus rapide |
-| `a += b` | 1,11 | 0,63 | 1,76× | ✅ plus rapide |
-| `a -= b` | 1,11 | 0,63 | 1,76× | ✅ plus rapide |
-| `a *= b` | 1,11 | 0,63 | 1,76× | ✅ plus rapide |
-| `a /= b` | 1,76 | 1,46 | 1,21× | ✅ plus rapide |
-| `a *= scalaire` | 0,88 | 0,62 | 1,44× | ✅ plus rapide |
-| `a /= scalaire` | 1,76 | 0,88 | 2,00× | ✅ plus rapide |
-| `a == a'` (égaux, pire cas) | 1,43 | 0,59 | 2,43× | ✅ plus rapide |
-| `a == b` (différents) | 0,59 | 0,59 | 1,00× | ➖ équivalent |
-| `a != a'` (égaux) | 1,43 | 0,59 | 2,43× | ✅ plus rapide |
-| `Dot` | 1,43 | 1,51 | 0,94× | ➖ équivalent |
-| `Cross` | 1,76 | 0,88 | 2,00× | ✅ plus rapide |
-| `MagnitudeSquared` | 0,76 | 1,26 | 0,60× | ❌ plus lent |
-| `Magnitude` | 4,23 | 1,39 | 3,05× | ✅ plus rapide |
-| `Normalize` | 8,12 | 4,48 | 1,81× | ✅ plus rapide |
-| `DistanceSquared` | 1,43 | 1,26 | 1,13× | ✅ plus rapide |
-| `Distance` | 4,23 | 1,39 | 3,05× | ✅ plus rapide |
-| `Angle` | 35,23 | 15,30 | 2,30× | ✅ plus rapide |
-| `Lerp` | 1,52 | 0,82 | 1,86× | ✅ plus rapide |
-| `Min` | 1,11 | 0,62 | 1,80× | ✅ plus rapide |
-| `Max` | 1,11 | 0,61 | 1,80× | ✅ plus rapide |
+| Produit scalaire | 0,30× | 0,31× | 0,32× | SIMD explicite plus lent |
+| Normalisation | 1,13× | 1,09× | 1,06× | Gain modéré |
+| Transformation de points | 2,46× | 2,52× | 2,50× | Gain net et stable |
 
-### Vec4
+Le résultat important est que la vectorisation explicite n'est pas
+automatiquement bénéfique. Le produit scalaire utilise ici un stockage AoS :
+la reconstruction des lanes par composante coûte suffisamment cher pour
+annuler le gain des multiplications SIMD. La transformation de points amortit
+mieux ce coût car les coefficients de la matrice sont réutilisés sur tout le
+lot.
 
-| Opération | C++ (ns/op) | SIMD (ns/op) | Speedup | Verdict |
-|:--|--:|--:|--:|:--|
-| `construct (x,y,z,w)` | 0,50 | 0,50 | 1,00× | ➖ équivalent |
-| `read x+y+z+w` | 1,01 | 1,01 | 1,00× | ➖ équivalent |
-| `write x,y,z,w` | 0,50 | 1,25 | 0,40× | ❌ plus lent |
-| `a + b` | 0,59 | 0,63 | 0,93× | ➖ équivalent |
-| `a - b` | 0,59 | 0,63 | 0,93× | ➖ équivalent |
-| `a * b` (composantes) | 0,59 | 0,63 | 0,93× | ➖ équivalent |
-| `a / b` (composantes) | 2,39 | 1,93 | 1,24× | ✅ plus rapide |
-| `-a` | 0,50 | 0,50 | 1,00× | ➖ équivalent |
-| `a * scalaire` | 0,59 | 0,62 | 0,95× | ➖ équivalent |
-| `scalaire * a` | 0,59 | 0,62 | 0,96× | ➖ équivalent |
-| `a / scalaire` | 1,01 | 0,88 | 1,14× | ✅ plus rapide |
-| `a += b` | 0,59 | 0,63 | 0,93× | ➖ équivalent |
-| `a -= b` | 0,59 | 0,63 | 0,93× | ➖ équivalent |
-| `a *= b` | 0,59 | 0,63 | 0,93× | ➖ équivalent |
-| `a /= b` | 2,40 | 1,94 | 1,24× | ✅ plus rapide |
-| `a *= scalaire` | 0,59 | 0,62 | 0,95× | ➖ équivalent |
-| `a /= scalaire` | 1,01 | 0,89 | 1,14× | ✅ plus rapide |
-| `a == a'` (égaux, pire cas) | 1,85 | 0,76 | 2,44× | ✅ plus rapide |
-| `a == b` (différents) | 0,59 | 0,76 | 0,78× | ❌ plus lent |
-| `a != a'` (égaux) | 1,85 | 0,59 | 3,14× | ✅ plus rapide |
-| `Dot` | 1,68 | 1,51 | 1,11× | ✅ plus rapide |
-| `MagnitudeSquared` | 1,01 | 1,26 | 0,80× | ❌ plus lent |
-| `Magnitude` | 10,43 | 1,38 | 7,54× | ✅ plus rapide |
-| `Normalize` | 18,53 | 4,91 | 3,78× | ✅ plus rapide |
-| `DistanceSquared` | 1,85 | 1,26 | 1,47× | ✅ plus rapide |
-| `Distance` | 10,95 | 1,39 | 7,91× | ✅ plus rapide |
-| `Angle` | 52,67 | 18,57 | 2,84× | ✅ plus rapide |
-| `Lerp` | 0,93 | 0,82 | 1,13× | ✅ plus rapide |
-| `Min` | 0,59 | 0,62 | 0,96× | ➖ équivalent |
-| `Max` | 0,59 | 0,62 | 0,96× | ➖ équivalent |
+### 4.2 Produit scalaire
 
-### Matrix3x3
+| Taille | Référence ns/op | SIMD SSE2 ns/op | ASM ns/op | Speedup SIMD |
+|--:|--:|--:|--:|--:|
+| 128 | 150,14 | 505,63 | 257,14 | 0,30× |
+| 4096 | 4 988,70 | 16 027,78 | 7 841,20 | 0,31× |
+| 131 072 | 165 406,75 | 524 978,94 | 262 986,50 | 0,32× |
 
-| Opération | C++ (ns/op) | SIMD (ns/op) | Speedup | Verdict |
-|:--|--:|--:|--:|:--|
-| `default ctor` | 11,39 | 0,76 | 15,08× | ✅ plus rapide |
-| `Identity()` | 11,38 | 0,76 | 15,07× | ✅ plus rapide |
-| `Zero()` | 0,76 | 0,76 | 1,00× | ➖ équivalent |
-| construction depuis `array<9>` | 0,90 | 2,01 | 0,45× | ❌ plus lent |
-| `operator()` lecture ×9 | 2,01 | 2,01 | 1,00× | ➖ équivalent |
-| `operator()` écriture ×9 | 0,76 | 13,33 | 0,06× | ❌ plus lent |
-| `A + B` | 1,51 | 1,50 | 1,01× | ➖ équivalent |
-| `A - B` | 1,51 | 1,51 | 1,00× | ➖ équivalent |
-| `A * B` | 4,65 | 8,41 | 0,55× | ❌ plus lent |
-| `A * vec3` | 3,04 | 4,78 | 0,64× | ❌ plus lent |
-| `A * scalaire` | 1,13 | 1,11 | 1,02× | ➖ équivalent |
-| `A *= B` | 4,16 | 12,43 | 0,33× | ❌ plus lent |
-| `A == A'` (égales, pire cas) | 4,12 | 1,43 | 2,88× | ✅ plus rapide |
-| `A == B` (différentes) | 1,01 | 1,26 | 0,80× | ❌ plus lent |
-| `A != A'` (égales) | 4,11 | 1,43 | 2,88× | ✅ plus rapide |
-| `Transpose` | 0,98 | 1,26 | 0,78× | ❌ plus lent |
-| `Determinant` | 14,35 | 2,02 | 7,12× | ✅ plus rapide |
-| `Inverse` | 53,64 | 65,82 | 0,82× | ❌ plus lent |
-| `Inverse(A) * vec3` (résolution) | 54,63 | 67,51 | 0,81× | ❌ plus lent |
-| `Scale(vec3)` | 9,82 | 0,76 | 12,99× | ✅ plus rapide |
-| `RotationX` | 11,85 | 7,85 | 1,51× | ✅ plus rapide |
-| `RotationY` | 11,51 | 6,77 | 1,70× | ✅ plus rapide |
-| `RotationZ` | 8,59 | 6,97 | 1,23× | ✅ plus rapide |
-| `Rz * Ry * Rx` (construction + composition) | 32,37 | 35,75 | 0,91× | ➖ équivalent |
-| `(Scale * Rz) * vec3` (pipeline) | 19,61 | 21,11 | 0,93× | ➖ équivalent |
-| `A * B * vec3` | 8,56 | 20,13 | 0,43× | ❌ plus lent |
+La version ASM est plus rapide que le kernel SSE batch actuel, mais reste
+plus lente que la référence C++ sur cette campagne. Ce résultat constitue une
+régression mesurée et non un échec de validation fonctionnelle.
 
-### Traitements par lots (Batch)
+### 4.3 Normalisation
 
-Temps rapporté **par élément** (1024 vecteurs ou 256 matrices par lot).
+| Taille | Référence ns/op | SIMD SSE2 ns/op | Speedup |
+|--:|--:|--:|--:|
+| 128 | 455,34 | 402,19 | 1,13× |
+| 4096 | 12 909,73 | 11 806,02 | 1,09× |
+| 131 072 | 442 963,51 | 416 318,74 | 1,06× |
 
-| Opération | C++ (ns/élément) | SIMD (ns/élément) | Speedup | Verdict |
-|:--|--:|--:|--:|:--|
-| `[Vec3] out[i] = a[i] + b[i]` | 0,30 | 0,56 | 0,54× | ❌ plus lent |
-| `[Vec3] out[i] = a[i] * scalaire` | 0,19 | 0,40 | 0,48× | ❌ plus lent |
-| `[Vec3]` somme des `Dot(a[i], b[i])` | 0,76 | 1,52 | 0,50× | ❌ plus lent |
-| `[Vec3] out[i] = Cross(a[i], b[i])` | 0,91 | 0,84 | 1,08× | ➖ équivalent |
-| `[Vec3] out[i] = Normalize(a[i])` | 8,82 | 4,96 | 1,78× | ✅ plus rapide |
-| `[Vec3] out[i] = Lerp(a[i], b[i], t)` | 0,32 | 0,56 | 0,57× | ❌ plus lent |
-| `[Vec4] out[i] = a[i] + b[i]` | 0,40 | 0,56 | 0,70× | ❌ plus lent |
-| `[Vec4] out[i] = a[i] * scalaire` | 0,33 | 0,38 | 0,85× | ❌ plus lent |
-| `[Vec4]` somme des `Dot(a[i], b[i])` | 0,85 | 1,52 | 0,56× | ❌ plus lent |
-| `[Vec4] out[i] = Normalize(a[i])` | 20,46 | 5,49 | 3,72× | ✅ plus rapide |
-| `[Vec4] out[i] = Lerp(a[i], b[i], t)` | 0,52 | 0,56 | 0,93× | ➖ équivalent |
-| `[Vec4] out[i] = Min(a[i], b[i])` | 0,40 | 0,55 | 0,72× | ❌ plus lent |
-| `[Mat3] out[i] = A * v[i]` (1 matrice, N vecteurs) | 0,73 | 4,79 | 0,15× | ❌ plus lent |
-| `[Mat3] out[i] = A[i] * v[i]` | 3,02 | 4,81 | 0,63× | ❌ plus lent |
-| `[Mat3] out[i] = A[i] * B[i]` | 9,50 | 8,47 | 1,12× | ✅ plus rapide |
-| `[Mat3] out[i] = Transpose(A[i])` | 1,15 | 1,26 | 0,91× | ➖ équivalent |
-| `[Mat3]` somme des `Determinant(A[i])` | 15,34 | 2,46 | 6,25× | ✅ plus rapide |
-| `[Mat3] out[i] = Inverse(A[i])` | 53,67 | 65,90 | 0,81× | ❌ plus lent |
+Le gain diminue avec la taille du lot, mais reste favorable. La dispersion
+est plus élevée sur le petit lot ; les résultats `128` éléments sont donc
+moins représentatifs que ceux des deux autres tailles.
 
-### Synthèse
+### 4.4 Transformation de points
 
-#### Moyenne géométrique du speedup par groupe
+| Taille | Référence ns/op | SIMD SSE2 ns/op | Speedup |
+|--:|--:|--:|--:|
+| 128 | 917,68 | 373,45 | 2,46× |
+| 4096 | 29 027,61 | 11 515,35 | 2,52× |
+| 131 072 | 949 270,52 | 380 400,27 | 2,50× |
 
-| Groupe | Speedup moyen |
-|:--|--:|
-| Vec3 | 1,55× |
-| Vec4 | 1,30× |
-| Matrix3x3 | 1,24× |
-| Batch | 0,85× |
-| **Global** | **1,26×** |
+La réutilisation des coefficients de la matrice et le calcul de quatre points
+en parallèle expliquent le gain le plus régulier de la campagne.
 
-#### Les 10 cas où le SIMD est le plus lent
+### 4.5 Coût des conversions AoS/SoA
 
-| Opération | Speedup |
-|:--|--:|
-| Matrix3x3 : `operator()` écriture ×9 | 0,06× |
-| Batch : `[Mat3] out[i] = A * v[i]` (1 matrice, N vecteurs) | 0,15× |
-| Matrix3x3 : `A *= B` | 0,33× |
-| Vec4 : écriture `x,y,z,w` | 0,40× |
-| Matrix3x3 : `A * B * vec3` | 0,43× |
-| Matrix3x3 : construction depuis `array<9>` | 0,45× |
-| Batch : `[Vec3] out[i] = a[i] * scalaire` | 0,48× |
-| Batch : `[Vec3]` somme des `Dot(a[i], b[i])` | 0,50× |
-| Batch : `[Vec3] out[i] = a[i] + b[i]` | 0,54× |
-| Matrix3x3 : `A * B` | 0,55× |
+| Taille | `ToSOA` ns/op | `ToAOS` ns/op |
+|--:|--:|--:|
+| 128 | 267,00 | 125,68 |
+| 4096 | 8 067,22 | 4 033,99 |
+| 131 072 | 270 371,87 | 221 851,91 |
 
-#### Les 10 plus gros gains du SIMD
+Ces conversions ne sont pas incluses dans les temps des trois kernels. Pour
+une utilisation réelle en pipeline AoS, leur coût doit être ajouté au coût
+total. La conclusion dépend alors de la réutilisation du format SoA sur
+plusieurs traitements successifs.
 
-| Opération | Speedup |
-|:--|--:|
-| Matrix3x3 : `default ctor` | 15,08× |
-| Matrix3x3 : `Identity()` | 15,07× |
-| Matrix3x3 : `Scale(vec3)` | 12,99× |
-| Vec4 : `Distance` | 7,91× |
-| Vec4 : `Magnitude` | 7,54× |
-| Matrix3x3 : `Determinant` | 7,12× |
-| Batch : `[Mat3]` somme des `Determinant(A[i])` | 6,25× |
-| Vec4 : `Normalize` | 3,78× |
-| Batch : `[Vec4] out[i] = Normalize(a[i])` | 3,72× |
-| Vec4 : `a != a'` (égaux) | 3,14× |
+Les résultats bruts complets sont conservés dans
+[`benchmark-results.txt`](benchmark-results.txt).
 
----
+## 5. Validation fonctionnelle
 
-## Conclusion
+La suite GoogleTest couvre :
 
-En conclusion, utiliser le SIMD n'est pas toujours pertinent à notre niveau : nous avons donc remis en version C++ standard les fonctions qui présentaient des régressions.
+- résultats connus des opérations vectorielles et matricielles ;
+- vecteurs nuls et valeurs non finies ;
+- identité, translation, rotation et composition ;
+- lots vides, petits et non multiples de quatre ;
+- comparaison entre référence scalaire et kernel SIMD ;
+- round-trip AoS → SoA → AoS ;
+- canary contre les écritures hors limites ;
+- alignement sur 16 octets.
 
-Cependant, le SIMD a significativement amélioré les performances de certaines fonctions, ce qui nous permettra certainement de mieux exploiter la machine qui exécute notre code, afin de fournir les meilleures performances possibles.
+La commande suivante a été exécutée avec succès :
+
+```powershell
+ctest --test-dir build -C Release --output-on-failure
+```
+
+Résultat : **264/264 tests passés**.
+
+## 6. Assembleur et analyse
+
+La fonction `Dot_Asm_x64` est implémentée dans
+`mathLibSIMD/src/dotProd.asm` et appelée depuis le benchmark. Elle charge les
+deux vecteurs avec `movaps`, multiplie avec `mulps`, puis réduit les lanes
+avec des additions et des permutations.
+
+### 6.1 Méthode et configuration
+
+Les extraits ci-dessous ont été générés avec MSVC **Release x64** et les
+options `/O2 /EHsc /std:c++latest /arch:SSE2`. Le listing assembleur a été
+produit à partir de `BatchProcessing.cpp` avec l'option `/FAcs`, puis vérifié
+avec les commentaires de code source émis par le compilateur :
+
+```powershell
+$env:ComSpec /c "call `"$env:VSINSTALLDIR\Common7\Tools\VsDevCmd.bat`" -arch=x64"
+cl /nologo /O2 /EHsc /std:c++latest /arch:SSE2 /FAcs `
+   /Fa batchprocessing-release.asm /c mathLibSIMD\src\BatchProcessing.cpp `
+   /ImathLibSIMD\include
+```
+
+La compilation du projet complet et l'exécution des tests ont également été
+validées en Release (`264/264` tests passés). Pour vérifier la campagne de
+mesure ciblée :
+
+```powershell
+build\benchmark\benchmark.exe dot reference medium
+build\benchmark\benchmark.exe dot simd medium
+build\benchmark\benchmark.exe dot asm medium
+```
+
+Les mesures obtenues sur 4096 éléments sont respectivement d'environ `5,1 µs`
+pour la référence, `15,5 µs` pour le SIMD explicite et `7,9 µs` pour l'ASM.
+
+### 6.2 Extrait ASM x64 et commentaire
+
+L'extrait source suivant est vérifiable directement dans
+`mathLibSIMD/src/dotProd.asm` :
+
+```asm
+movaps  xmm0, [rcx]       ; charge les quatre floats de lhs
+mulps   xmm0, [rdx]       ; multiplication composante par composante
+movaps  xmm1, xmm0
+movhlps xmm1, xmm0        ; déplace les deux lanes hautes
+addps   xmm0, xmm1        ; première réduction partielle
+movaps  xmm1, xmm0
+shufps  xmm1, xmm1, 1     ; duplique la lane contenant le second résultat
+addss   xmm0, xmm1        ; somme finale dans xmm0[0]
+```
+
+`rcx` et `rdx` sont les deux premiers paramètres de la convention d'appel
+x64 Windows. `movaps` suppose que les adresses sont alignées sur 16 octets.
+`mulps` produit quatre multiplications en parallèle. Les permutations et les
+additions réduisent ensuite les quatre lanes en un seul scalaire retourné
+dans `xmm0`.
+
+### 6.3 Désassemblage réel de la référence C++
+
+La référence reste scalaire : chaque itération charge les trois composantes,
+utilise `mulss` et `addss`, puis écrit un seul résultat avec `movss`.
+
+```asm
+; Fonction source : simd::BatchDotReference
+00070  call    Vec3f::getZ
+00083  movaps  xmm9,xmm0
+0008a  call    Vec3f::getX
+0009d  movaps  xmm8,xmm0
+000a4  mulss   xmm8,xmm6
+000a9  call    Vec3f::getY
+000b9  movaps  xmm7,xmm0
+000bf  mulss   xmm7,xmm6
+000c3  addss   xmm7,xmm8
+000c8  call    Vec3f::getZ
+000cd  mulss   xmm0,xmm9
+000d2  addss   xmm0,xmm7
+000d6  movss   [r14+rsi*4],xmm0
+```
+
+Ici, `mulss` et `addss` sont des opérations scalaires sur la lane basse.
+Cette absence de `mulps`/`addps` est cohérente avec la version de référence.
+
+### 6.4 Désassemblage réel de `BatchDot` SIMD
+
+L'extrait suivant provient du même listing Release et correspond à la boucle
+SIMD de `BatchDot` :
+
+```asm
+; Fonction source : simd::BatchDot
+00374  mulps   xmm6,xmm12
+00388  mulps   xmm10,xmm13
+00392  mulps   xmm3,xmm11
+00396  addps   xmm6,xmm10
+0039a  addps   xmm6,xmm3
+0039d  movups  [rsi+rdi*4],xmm6
+003a1  add     rdi,4
+003a9  cmp     rax,rbx
+003ac  jb      $LL4@BatchDot
+```
+
+Les trois `mulps` calculent en parallèle les termes `x`, `y` et `z` pour
+quatre vecteurs. Les deux `addps` additionnent les termes dans les quatre
+lanes, puis `movups` écrit les quatre résultats. `add rdi,4` confirme qu'une
+itération avance de quatre éléments. Avant ce bloc, le listing montre les
+appels à `getX`, `getY` et `getZ` ainsi que les instructions `unpcklps` et
+`movlhps` utilisées pour reconstruire les lanes depuis l'AoS. La boucle
+résiduelle revient ensuite à `Vec3f::Dot` pour les éléments restants.
+
+Le listing assembleur constitue une preuve reproductible du code généré.
+
+### 6.5 Profilage CPU Visual Studio
+
+Un profilage CPU a été réalisé avec Visual Studio sur l'exécutable `benchmark`
+en configuration Release x64. La session visible dans
+[`Profilage CPU.png`](Profilage%20CPU.png) dure `2 min 11 s` et représente
+`127 508` unités processeur. Le tableau « Top des fonctions » affiche :
+
+| Entrée affichée par Visual Studio | Temps total | Temps UC exclusif |
+|:--|--:|--:|
+| `benchmark.dll!0x00007ff7793b21d0` | 7,70 % | 7,66 % |
+| `benchmark.dll!0x00007ff7793b2f5c` | 4,70 % | 4,66 % |
+| `benchmark.dll!0x00007ff7793b2f5f` | 2,85 % | 2,83 % |
+| `benchmark.dll!0x00007ff7793b2193` | 2,70 % | 2,68 % |
+| `benchmark.dll!0x00007ff7793b2e13` | 2,11 % | 2,10 % |
+
+Le chemin réactif confirme que le processus `benchmark` concentre
+`100,00 %` du temps observé. La capture ne contient toutefois pas les symboles
+de débogage : les adresses ne peuvent donc pas être attribuées avec certitude
+à `BatchDot`, `LoadComponent` ou une autre fonction précise. Elle constitue
+une preuve de collecte CPU, mais pas une mesure symbolisée par fonction.
+
+Cette limite doit être prise en compte avec les mesures nanobench et le
+désassemblage : `BatchDot` réalise bien trois `mulps` et deux `addps` par
+groupe de quatre, mais la capture seule ne permet pas de quantifier
+séparément le coût de la reconstruction AoS. Une session complémentaire avec
+les symboles PDB chargés permettrait d'obtenir les noms exacts.
+
+## 7. Limites et conclusions
+
+- Le benchmark actuel mesure correctement trois tailles et conserve les
+  données brutes, mais les petites opérations peuvent être proches du
+  plancher de mesure.
+- Le benchmark nanobench signale certaines petites mesures comme instables ;
+  elles ne doivent pas être utilisées seules pour conclure.
+- Le kernel `BatchDot` doit être considéré comme une expérience mesurée :
+  son résultat montre qu'une vectorisation explicite avec extraction AoS peut
+  régresser.
+- Le stockage SoA ou une conversion amortie sur plusieurs opérations pourrait
+  améliorer ce cas, mais relève d'une expérience ultérieure.
+- Aucun facteur minimal d'accélération n'est imposé par le cahier des charges ;
+  les régressions sont donc acceptables si elles sont expliquées honnêtement.
+
+## 8. Utilisation de l'IA
+
+Une IA a été utilisée comme assistant pour la revue de conformité, la
+documentation Doxygen, l'analyse des résultats et l'identification de
+corrections minimales.

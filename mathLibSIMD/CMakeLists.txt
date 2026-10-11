@@ -10,7 +10,7 @@ set_source_files_properties(
 )
 
 file(GLOB_RECURSE SOURCES
-    CONFNIGURE_DEPENDS
+    CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
     ${ASM_NAME}
 )

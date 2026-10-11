@@ -32,7 +32,8 @@ namespace simd
         Matrix3x3 Transpose() const;
         float Determinant() const;
         // Gauss-Jordan with scaled partial pivoting. Rejects singular/ill-conditioned input.
-        Matrix3x3 Inverse() const;
+        Matrix3x3 Inverse(float relativeTolerance =
+            float{64} * std::numeric_limits<float>::epsilon()) const;
         static Matrix3x3 Scale(const Vec3f& scale);
         static Matrix3x3 RotationX(float radians);
         static Matrix3x3 RotationY(float radians);

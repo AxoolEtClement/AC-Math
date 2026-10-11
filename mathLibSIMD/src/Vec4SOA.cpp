@@ -161,8 +161,21 @@ namespace simd
 
     Vec4SOA Vec4SOA::Normalize() const
     {
-        __m128 invLen = _mm_div_ps(_mm_set1_ps(1.0f), Magnitude());
-        return { _mm_mul_ps(_dataX, invLen), _mm_mul_ps(_dataY, invLen), _mm_mul_ps(_dataZ, invLen), _mm_mul_ps(_dataW, invLen) };
+        __m128 mag = Magnitude();
+        __m128 invLen = _mm_div_ps(_mm_set1_ps(1.0f), mag);
+
+        // Masque pour les vecteurs non nuls (mag > 0)
+        __m128 mask = _mm_cmpgt_ps(mag, _mm_setzero_ps());
+
+        // Pour les vecteurs nuls, on force le résultat à 0 au lieu de NaN
+        __m128 safeInvLen = _mm_and_ps(invLen, mask);
+
+        return {
+            _mm_mul_ps(_dataX, safeInvLen),
+            _mm_mul_ps(_dataY, safeInvLen),
+            _mm_mul_ps(_dataZ, safeInvLen),
+            _mm_mul_ps(_dataW, safeInvLen)
+        };
     }
 
     __m128 Vec4SOA::DistanceSquared(const Vec4SOA& rhs) const

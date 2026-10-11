@@ -7,9 +7,10 @@ namespace
     inline __m128 DotVec3(__m128 a, __m128 b)
     {
         const __m128 m = _mm_mul_ps(a, b);
+        const __m128 x = _mm_shuffle_ps(m, m, _MM_SHUFFLE(0, 0, 0, 0));
         const __m128 y = _mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 1, 1, 1));
         const __m128 z = _mm_shuffle_ps(m, m, _MM_SHUFFLE(2, 2, 2, 2));
-        return _mm_add_ps(_mm_add_ps(m, y), z);
+        return _mm_add_ps(_mm_add_ps(x, y), z);
     }
 }
 
@@ -204,18 +205,17 @@ namespace simd {
 
     float Vec3f::Angle(const Vec3f& rhs) const
     {
-        __m128 dot_vec = _mm_dp_ps(_data, rhs._data, 0x71);
-        __m128 mag_vec = _mm_sqrt_ps(_mm_mul_ps(_mm_dp_ps(_data, _data, 0x71), _mm_dp_ps(rhs._data, rhs._data, 0x71)));
+        const float mag_sq = MagnitudeSquared();
+        const float rhs_mag_sq = rhs.MagnitudeSquared();
 
-        float dot = _mm_cvtss_f32(dot_vec);
-        float mag = _mm_cvtss_f32(mag_vec);
-
-        if (mag < 1e-6f)
+        if (mag_sq < 1e-12f || rhs_mag_sq < 1e-12f)
         {
             throw std::domain_error("Cannot compute angle with a zero vector.");
         }
 
-        float cos_theta = std::clamp(dot / mag, -1.0f, 1.0f);
+        const float dot = Dot(rhs);
+        const float mag = std::sqrt(mag_sq * rhs_mag_sq);
+        const float cos_theta = std::clamp(dot / mag, -1.0f, 1.0f);
 
         return std::acos(cos_theta);
     }
