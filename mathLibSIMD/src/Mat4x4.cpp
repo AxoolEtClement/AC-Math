@@ -1,5 +1,19 @@
 #include "Mat4x4.hpp"
 
+namespace
+{
+
+    inline float& At(__m128& row, std::size_t c)
+    {
+        return reinterpret_cast<float*>(&row)[c];
+    }
+
+    inline const float& At(const __m128& row, std::size_t c)
+    {
+        return reinterpret_cast<const float*>(&row)[c];
+    }
+}
+
 namespace simd
 {
     Matrix4x4::Matrix4x4() 
@@ -36,7 +50,10 @@ namespace simd
         {
             throw std::out_of_range("Matrix index is out of range");
         }
-        return _data[row].m128_f32[column];
+
+        return At(_data[row], column);
+
+
     }
 
     const float& Matrix4x4::operator()(std::size_t row, std::size_t column) const
@@ -45,7 +62,7 @@ namespace simd
         {
             throw std::out_of_range("Matrix index is out of range");
         }
-        return _data[row].m128_f32[column];
+        return At(_data[row], column);
     }
 
     Matrix4x4 Matrix4x4::operator+(const Matrix4x4& rhs) const

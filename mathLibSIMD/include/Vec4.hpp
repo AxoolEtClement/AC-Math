@@ -21,6 +21,7 @@ namespace simd
      * Stockage aligné sur 16 octets via alignas(16).
      * Les données sont stockées dans un registre __m128.
      */
+    class Vec4SOA;
     class alignas(16) Vec4
     {
     public:
@@ -34,6 +35,7 @@ namespace simd
         float getY() const;
         float getZ() const;
         float getW() const;
+        __m128 getData() const { return _data; };
         void setX(float value);
         void setY(float value);
         void setZ(float value);
