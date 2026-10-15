@@ -1,20 +1,15 @@
-# À renommer en mathLibSIMD/CMakeLists.txt
+cmake_minimum_required(VERSION 3.25)
+project(mathLibSIMD)
 
 file(GLOB_RECURSE SIMD_SOURCES
     CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 
-if(MSVC)
-    # Version MASM : uniquement sous MSVC
+# Si tu es sous MSVC et que tu as un fichier .asm spécifique
+if(MSVC AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/dotProd.asm")
     enable_language(ASM_MASM)
-    list(FILTER SIMD_SOURCES EXCLUDE REGEX "dotProd_intrinsics\\.cpp$")
     list(APPEND SIMD_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/dotProd.asm")
-else()
-    # GCC / Clang : le .asm (syntaxe MASM) n'est pas compilé,
-    # on utilise la version intrinsics src/dotProd_intrinsics.cpp
-    list(APPEND SIMD_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/dotProd_intrinsics.cpp")
-    list(REMOVE_DUPLICATES SIMD_SOURCES)
 endif()
 
 add_library(mathLibSIMD STATIC ${SIMD_SOURCES})
